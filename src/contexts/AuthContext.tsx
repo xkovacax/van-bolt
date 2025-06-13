@@ -7,11 +7,14 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  needsProfileSetup: boolean;
+  pendingUserData: any;
   login: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   loginWithGoogle: () => Promise<{ error: AuthError | null }>;
   logout: () => Promise<void>;
   register: (name: string, email: string, password: string, role: 'owner' | 'customer') => Promise<{ error: AuthError | null }>;
   isAuthenticated: boolean;
+  completePendingSetup: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -32,6 +35,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [needsProfileSetup, setNeedsProfileSetup] = useState(false);
+  const [pendingUserData, setPendingUserData] = useState<any>(null);
 
   useEffect(() => {
     // Get initial session
@@ -54,6 +59,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         await fetchUserProfile(session.user);
       } else {
         setUser(null);
+        setNeedsProfileSetup(false);
+        setPendingUserData(null);
         setLoading(false);
       }
     });
@@ -70,41 +77,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         .single();
 
       if (error && error.code === 'PGRST116') {
-        // User profile doesn't exist, create one
-        const newUser = {
+        // User profile doesn't exist - need to set up profile
+        const userData = {
           id: supabaseUser.id,
-          name: supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'User',
           email: supabaseUser.email!,
-          role: 'customer' as const,
-          avatar: supabaseUser.user_metadata?.avatar_url || `https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150`,
-          rating: 5.0,
-          review_count: 0
+          name: supabaseUser.user_metadata?.full_name || 
+                supabaseUser.user_metadata?.name || 
+                supabaseUser.email?.split('@')[0] || 'User',
+          avatar: supabaseUser.user_metadata?.avatar_url || 
+                  supabaseUser.user_metadata?.picture
         };
-
-        const { data: createdUser, error: createError } = await supabase
-          .from('users')
-          .insert([newUser])
-          .select()
-          .single();
-
-        if (createError) {
-          console.error('Error creating user profile:', createError);
-          setLoading(false);
-          return;
-        }
-
-        setUser({
-          id: createdUser.id,
-          name: createdUser.name,
-          email: createdUser.email,
-          role: createdUser.role,
-          avatar: createdUser.avatar,
-          rating: createdUser.rating,
-          reviewCount: createdUser.review_count
-        });
+        
+        setPendingUserData(userData);
+        setNeedsProfileSetup(true);
+        setLoading(false);
+        return;
       } else if (error) {
         console.error('Error fetching user profile:', error);
-      } else if (userProfile) {
+        setLoading(false);
+        return;
+      }
+
+      if (userProfile) {
         setUser({
           id: userProfile.id,
           name: userProfile.name,
@@ -114,6 +108,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           rating: userProfile.rating,
           reviewCount: userProfile.review_count
         });
+        setNeedsProfileSetup(false);
+        setPendingUserData(null);
       }
     } catch (error) {
       console.error('Error in fetchUserProfile:', error);
@@ -140,7 +136,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: getRedirectUrl()
+        redirectTo: getRedirectUrl(),
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        }
       }
     });
     
@@ -152,6 +152,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);
+    setNeedsProfileSetup(false);
+    setPendingUserData(null);
     setLoading(false);
   };
 
@@ -184,7 +186,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             name,
             email,
             role,
-            avatar: `https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150`,
+            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=150&background=059669&color=fff&bold=true`,
             rating: 5.0,
             review_count: 0
           }
@@ -199,15 +201,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return { error };
   };
 
+  const completePendingSetup = () => {
+    setNeedsProfileSetup(false);
+    setPendingUserData(null);
+  };
+
   const value = {
     user,
     session,
     loading,
+    needsProfileSetup,
+    pendingUserData,
     login,
     loginWithGoogle,
     logout,
     register,
-    isAuthenticated: !!session
+    isAuthenticated: !!session,
+    completePendingSetup
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
