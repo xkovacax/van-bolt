@@ -80,7 +80,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // User profile doesn't exist - need to set up profile
         const userData = {
           id: supabaseUser.id,
-          email: supabaseUser.email!,
+          email: supabaseUser.email || '',
           name: supabaseUser.user_metadata?.full_name || 
                 supabaseUser.user_metadata?.name || 
                 supabaseUser.email?.split('@')[0] || 'User',
@@ -101,8 +101,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (userProfile) {
         setUser({
           id: userProfile.id,
-          name: userProfile.name,
-          email: userProfile.email,
+          name: userProfile.name || 'User',
+          email: userProfile.email || '',
           role: userProfile.role,
           avatar: userProfile.avatar,
           rating: userProfile.rating,
@@ -183,10 +183,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         .insert([
           {
             id: data.user.id,
-            name,
-            email,
+            name: name || 'User',
+            email: email || '',
             role,
-            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=150&background=059669&color=fff&bold=true`,
+            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&size=150&background=059669&color=fff&bold=true`,
             rating: 5.0,
             review_count: 0
           }

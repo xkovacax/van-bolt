@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, User as UserIcon, Upload, Camera } from 'lucide-react';
+import { X, User as UserIcon, Camera } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 
@@ -11,17 +11,20 @@ interface UserProfileSetupProps {
     email: string;
     name: string;
     avatar?: string;
-  };
+  } | null;
 }
 
 const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ isOpen, onClose, userData }) => {
   const [formData, setFormData] = useState({
-    name: userData.name || '',
+    name: userData?.name || '',
     role: 'customer' as 'owner' | 'customer',
-    avatar: userData.avatar || ''
+    avatar: userData?.avatar || ''
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Don't render if no userData
+  if (!userData) return null;
 
   const generateAvatar = (name: string) => {
     const initials = name
@@ -60,7 +63,6 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ isOpen, onClose, us
       let avatarUrl = formData.avatar;
       if (!avatarUrl) {
         // Create a default avatar URL with initials
-        const { initials, colorClass } = generateAvatar(formData.name);
         avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}&size=150&background=059669&color=fff&bold=true`;
       }
 

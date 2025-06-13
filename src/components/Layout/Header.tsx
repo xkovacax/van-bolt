@@ -22,6 +22,48 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
     setIsMenuOpen(false);
   };
 
+  // Don't render user-dependent content while loading
+  if (loading) {
+    return (
+      <header className="bg-white shadow-sm border-b border-gray-100 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            {/* Logo */}
+            <div className="flex items-center">
+              <div className="flex-shrink-0 flex items-center">
+                <div className="w-8 h-8 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-lg flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">MC</span>
+                </div>
+                <span className="ml-2 text-xl font-bold text-gray-900">MyCamper</span>
+              </div>
+            </div>
+
+            {/* Desktop Search */}
+            <div className="hidden md:block flex-1 max-w-md mx-8">
+              <form onSubmit={handleSearch} className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-4 w-4 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Hľadať campervany podľa lokality..."
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                />
+              </form>
+            </div>
+
+            {/* Loading spinner */}
+            <div className="flex items-center space-x-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-600"></div>
+            </div>
+          </div>
+        </div>
+      </header>
+    );
+  }
+
   return (
     <header className="bg-white shadow-sm border-b border-gray-100 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -66,9 +108,7 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
               <span>Pridať Campervan</span>
             </button>
 
-            {loading ? (
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-600"></div>
-            ) : isAuthenticated && user ? (
+            {isAuthenticated && user ? (
               <>
                 <button className="flex items-center space-x-1 px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
                   <Heart className="h-4 w-4" />
@@ -83,23 +123,29 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
                     onClick={() => setIsMenuOpen(!isMenuOpen)}
                     className="flex items-center space-x-2 p-2 rounded-full hover:bg-gray-100 transition-colors"
                   >
-                    <img
-                      src={user.avatar}
-                      alt={user.name}
-                      className="w-8 h-8 rounded-full object-cover"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.src = `https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150`;
-                      }}
-                    />
-                    <span className="text-sm font-medium text-gray-700">{user.name}</span>
+                    {user.avatar ? (
+                      <img
+                        src={user.avatar}
+                        alt={user.name || 'User'}
+                        className="w-8 h-8 rounded-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&size=150&background=059669&color=fff&bold=true`;
+                        }}
+                      />
+                    ) : (
+                      <div className="w-8 h-8 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-full flex items-center justify-center">
+                        <User className="h-4 w-4 text-white" />
+                      </div>
+                    )}
+                    <span className="text-sm font-medium text-gray-700">{user.name || 'User'}</span>
                   </button>
                   
                   {isMenuOpen && (
                     <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
                       <div className="px-4 py-2 border-b border-gray-100">
-                        <p className="text-sm font-medium text-gray-900">{user.name}</p>
-                        <p className="text-xs text-gray-500">{user.email}</p>
+                        <p className="text-sm font-medium text-gray-900">{user.name || 'User'}</p>
+                        <p className="text-xs text-gray-500">{user.email || ''}</p>
                       </div>
                       <button
                         onClick={handleLogout}
@@ -163,25 +209,27 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
                 <span>Pridať Campervan</span>
               </button>
               
-              {loading ? (
-                <div className="flex justify-center py-2">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-600"></div>
-                </div>
-              ) : isAuthenticated && user ? (
+              {isAuthenticated && user ? (
                 <>
                   <div className="flex items-center space-x-3 px-3 py-2">
-                    <img
-                      src={user.avatar}
-                      alt={user.name}
-                      className="w-8 h-8 rounded-full object-cover"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.src = `https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150`;
-                      }}
-                    />
+                    {user.avatar ? (
+                      <img
+                        src={user.avatar}
+                        alt={user.name || 'User'}
+                        className="w-8 h-8 rounded-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&size=150&background=059669&color=fff&bold=true`;
+                        }}
+                      />
+                    ) : (
+                      <div className="w-8 h-8 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-full flex items-center justify-center">
+                        <User className="h-4 w-4 text-white" />
+                      </div>
+                    )}
                     <div>
-                      <p className="text-sm font-medium text-gray-900">{user.name}</p>
-                      <p className="text-xs text-gray-500">{user.email}</p>
+                      <p className="text-sm font-medium text-gray-900">{user.name || 'User'}</p>
+                      <p className="text-xs text-gray-500">{user.email || ''}</p>
                     </div>
                   </div>
                   <button className="flex items-center space-x-2 w-full px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
