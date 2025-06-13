@@ -63,15 +63,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const fetchUserProfile = async (supabaseUser: SupabaseUser) => {
     try {
-      const { data: profile, error } = await supabase
-        .from('profiles')
+      const { data: userProfile, error } = await supabase
+        .from('users')
         .select('*')
         .eq('id', supabaseUser.id)
         .single();
 
       if (error && error.code === 'PGRST116') {
-        // Profile doesn't exist, create one
-        const newProfile = {
+        // User profile doesn't exist, create one
+        const newUser = {
           id: supabaseUser.id,
           name: supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'User',
           email: supabaseUser.email!,
@@ -81,38 +81,38 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           review_count: 0
         };
 
-        const { data: createdProfile, error: createError } = await supabase
-          .from('profiles')
-          .insert([newProfile])
+        const { data: createdUser, error: createError } = await supabase
+          .from('users')
+          .insert([newUser])
           .select()
           .single();
 
         if (createError) {
-          console.error('Error creating profile:', createError);
+          console.error('Error creating user profile:', createError);
           setLoading(false);
           return;
         }
 
         setUser({
-          id: createdProfile.id,
-          name: createdProfile.name,
-          email: createdProfile.email,
-          role: createdProfile.role,
-          avatar: createdProfile.avatar,
-          rating: createdProfile.rating,
-          reviewCount: createdProfile.review_count
+          id: createdUser.id,
+          name: createdUser.name,
+          email: createdUser.email,
+          role: createdUser.role,
+          avatar: createdUser.avatar,
+          rating: createdUser.rating,
+          reviewCount: createdUser.review_count
         });
       } else if (error) {
-        console.error('Error fetching profile:', error);
-      } else if (profile) {
+        console.error('Error fetching user profile:', error);
+      } else if (userProfile) {
         setUser({
-          id: profile.id,
-          name: profile.name,
-          email: profile.email,
-          role: profile.role,
-          avatar: profile.avatar,
-          rating: profile.rating,
-          reviewCount: profile.review_count
+          id: userProfile.id,
+          name: userProfile.name,
+          email: userProfile.email,
+          role: userProfile.role,
+          avatar: userProfile.avatar,
+          rating: userProfile.rating,
+          reviewCount: userProfile.review_count
         });
       }
     } catch (error) {
@@ -174,10 +174,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return { error };
     }
 
-    // If user is created, create profile
+    // If user is created, create user profile
     if (data.user) {
-      const { error: profileError } = await supabase
-        .from('profiles')
+      const { error: userError } = await supabase
+        .from('users')
         .insert([
           {
             id: data.user.id,
@@ -190,8 +190,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           }
         ]);
 
-      if (profileError) {
-        console.error('Error creating profile:', profileError);
+      if (userError) {
+        console.error('Error creating user profile:', userError);
       }
     }
 
