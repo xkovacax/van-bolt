@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { X, User as UserIcon, Camera } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../lib/supabase';
 
 interface UserProfileSetupProps {
   isOpen: boolean;
@@ -17,11 +16,11 @@ interface UserProfileSetupProps {
 const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ isOpen, onClose, userData }) => {
   const [formData, setFormData] = useState({
     name: userData?.name || '',
-    role: 'customer' as 'owner' | 'customer',
-    avatar: userData?.avatar || ''
+    role: 'customer' as 'owner' | 'customer'
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { createUserProfile } = useAuth();
 
   // Don't render if no userData
   if (!userData) return null;
@@ -59,49 +58,21 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ isOpen, onClose, us
     }
 
     try {
-      // Generate default avatar if none provided
-      let avatarUrl = formData.avatar;
-      if (!avatarUrl) {
-        // Create a default avatar URL with initials
-        avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}&size=150&background=059669&color=fff&bold=true`;
-      }
+      console.log('Submitting profile setup:', formData);
+      
+      const { error: profileError } = await createUserProfile({
+        name: formData.name.trim(),
+        role: formData.role
+      });
 
-      // Create user profile in database
-      const { error: dbError } = await supabase
-        .from('users')
-        .insert([
-          {
-            id: userData.id,
-            name: formData.name.trim(),
-            email: userData.email,
-            role: formData.role,
-            avatar: avatarUrl,
-            rating: 5.0,
-            review_count: 0
-          }
-        ]);
-
-      if (dbError) {
-        console.error('Database error:', dbError);
+      if (profileError) {
+        console.error('Profile creation error:', profileError);
         setError('Chyba pri vytváraní profilu. Skúste to znovu.');
         return;
       }
 
-      // Update auth metadata
-      const { error: updateError } = await supabase.auth.updateUser({
-        data: {
-          full_name: formData.name.trim(),
-          role: formData.role
-        }
-      });
-
-      if (updateError) {
-        console.error('Auth update error:', updateError);
-      }
-
+      console.log('Profile created successfully');
       onClose();
-      // Refresh the page to load the new user data
-      window.location.reload();
     } catch (error) {
       console.error('Profile setup error:', error);
       setError('Nastala neočakávaná chyba. Skúste to znovu.');
@@ -146,9 +117,9 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ isOpen, onClose, us
           {/* Avatar Preview */}
           <div className="text-center">
             <div className="relative inline-block">
-              {formData.avatar ? (
+              {userData.avatar ? (
                 <img
-                  src={formData.avatar}
+                  src={userData.avatar}
                   alt="Avatar"
                   className="w-20 h-20 rounded-full object-cover mx-auto"
                   onError={(e) => {
