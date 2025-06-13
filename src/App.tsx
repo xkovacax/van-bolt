@@ -109,6 +109,12 @@ const AppContent: React.FC = () => {
     alert(`Žiadosť o rezerváciu bola odoslaná pre ${camper.title}! Čoskoro dostanete potvrdzujúci e-mail.`);
   };
 
+  const handleProfileSetupClose = () => {
+    // Don't allow closing without completing setup
+    // User must complete the profile setup
+    console.log('⚠️ Profile setup cannot be closed without completion');
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header onSearch={handleSearch} onAuthClick={() => setIsAuthModalOpen(true)} />
@@ -175,12 +181,14 @@ const AppContent: React.FC = () => {
         onClose={() => setIsAuthModalOpen(false)}
       />
 
-      {/* User Profile Setup Modal */}
-      <UserProfileSetup
-        isOpen={needsProfileSetup}
-        onClose={completePendingSetup}
-        userData={pendingUserData}
-      />
+      {/* User Profile Setup Modal - CRITICAL: This must show when needsProfileSetup is true */}
+      {needsProfileSetup && pendingUserData && (
+        <UserProfileSetup
+          isOpen={true}
+          onClose={handleProfileSetupClose}
+          userData={pendingUserData}
+        />
+      )}
       
       {/* Mobile Filter Sidebar */}
       <FilterSidebar
@@ -189,6 +197,16 @@ const AppContent: React.FC = () => {
         filters={filters}
         onFiltersChange={handleFiltersChange}
       />
+
+      {/* Debug Panel - Development Only */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="fixed bottom-4 right-4 bg-black bg-opacity-75 text-white p-3 rounded text-xs max-w-xs">
+          <div className="font-bold mb-2">🔍 Auth Debug</div>
+          <div>Profile Setup: {needsProfileSetup ? '✅' : '❌'}</div>
+          <div>Pending Data: {pendingUserData ? '✅' : '❌'}</div>
+          <div>Pending Name: {pendingUserData?.name || 'N/A'}</div>
+        </div>
+      )}
     </div>
   );
 };

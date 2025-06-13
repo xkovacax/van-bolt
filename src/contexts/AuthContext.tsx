@@ -42,10 +42,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('Initial session:', session);
+      console.log('🔄 Initial session check:', session?.user?.id);
       setSession(session);
       if (session?.user) {
-        fetchUserProfile(session.user);
+        handleUserSession(session.user);
       } else {
         setLoading(false);
       }
@@ -55,37 +55,43 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state change:', event, session);
+      console.log('🔄 Auth state change:', event, session?.user?.id);
       setSession(session);
       
       if (session?.user) {
-        await fetchUserProfile(session.user);
+        await handleUserSession(session.user);
       } else {
-        setUser(null);
-        setNeedsProfileSetup(false);
-        setPendingUserData(null);
-        setLoading(false);
+        resetAuthState();
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchUserProfile = async (supabaseUser: SupabaseUser) => {
+  const resetAuthState = () => {
+    console.log('🔄 Resetting auth state');
+    setUser(null);
+    setNeedsProfileSetup(false);
+    setPendingUserData(null);
+    setLoading(false);
+  };
+
+  const handleUserSession = async (supabaseUser: SupabaseUser) => {
     try {
-      console.log('Fetching user profile for:', supabaseUser.id);
+      console.log('👤 Handling user session for:', supabaseUser.id);
       
+      // Check if user profile exists in database
       const { data: userProfile, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', supabaseUser.id)
         .single();
 
-      console.log('User profile query result:', { userProfile, error });
+      console.log('📊 Database query result:', { userProfile, error });
 
       if (error && error.code === 'PGRST116') {
-        // User profile doesn't exist - need to set up profile
-        console.log('User profile not found, setting up profile setup');
+        // User profile doesn't exist - need profile setup
+        console.log('❌ User profile not found - triggering setup');
         
         const userData = {
           id: supabaseUser.id,
@@ -97,20 +103,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                   supabaseUser.user_metadata?.picture
         };
         
-        console.log('Setting pending user data:', userData);
+        console.log('📝 Setting up profile with data:', userData);
         setPendingUserData(userData);
         setNeedsProfileSetup(true);
-        setUser(null); // Clear user until profile is complete
+        setUser(null);
         setLoading(false);
         return;
-      } else if (error) {
-        console.error('Error fetching user profile:', error);
+      } 
+      
+      if (error) {
+        console.error('❌ Database error:', error);
         setLoading(false);
         return;
       }
 
       if (userProfile) {
-        console.log('User profile found:', userProfile);
+        console.log('✅ User profile found:', userProfile.name);
         setUser({
           id: userProfile.id,
           name: userProfile.name || 'User',
@@ -124,7 +132,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setPendingUserData(null);
       }
     } catch (error) {
-      console.error('Error in fetchUserProfile:', error);
+      console.error('❌ Error in handleUserSession:', error);
     } finally {
       setLoading(false);
     }
@@ -132,11 +140,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const createUserProfile = async (userData: { name: string; role: 'owner' | 'customer' }) => {
     if (!pendingUserData) {
+      console.error('❌ No pending user data for profile creation');
       return { error: 'No pending user data' };
     }
 
     try {
-      console.log('Creating user profile:', userData);
+      console.log('🔨 Creating user profile:', userData);
       
       // Generate default avatar if none provided
       let avatarUrl = pendingUserData.avatar;
@@ -162,11 +171,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         .single();
 
       if (dbError) {
-        console.error('Database error:', dbError);
+        console.error('❌ Database insert error:', dbError);
         return { error: dbError };
       }
 
-      console.log('User profile created successfully:', newUser);
+      console.log('✅ User profile created successfully:', newUser.name);
 
       // Update auth metadata
       const { error: updateError } = await supabase.auth.updateUser({
@@ -177,7 +186,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       });
 
       if (updateError) {
-        console.error('Auth update error:', updateError);
+        console.error('⚠️ Auth metadata update error:', updateError);
       }
 
       // Set the user in state
@@ -195,9 +204,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setNeedsProfileSetup(false);
       setPendingUserData(null);
 
+      console.log('🎉 Profile setup completed successfully');
       return { error: null };
     } catch (error) {
-      console.error('Profile creation error:', error);
+      console.error('❌ Profile creation error:', error);
       return { error };
     }
   };
@@ -217,6 +227,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const loginWithGoogle = async () => {
+    console.log('🔗 Starting Google OAuth login');
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -232,13 +243,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = async () => {
+    console.log('👋 Logging out user');
     setLoading(true);
     await supabase.auth.signOut();
-    setUser(null);
-    setSession(null);
-    setNeedsProfileSetup(false);
-    setPendingUserData(null);
-    setLoading(false);
+    resetAuthState();
   };
 
   const register = async (name: string, email: string, password: string, role: 'owner' | 'customer') => {
@@ -286,9 +294,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const completePendingSetup = () => {
+    console.log('❌ Cancelling profile setup');
     setNeedsProfileSetup(false);
     setPendingUserData(null);
   };
+
+  // Debug logging for state changes
+  useEffect(() => {
+    console.log('🔍 Auth State:', {
+      hasUser: !!user,
+      userName: user?.name,
+      hasSession: !!session,
+      loading,
+      needsProfileSetup,
+      hasPendingData: !!pendingUserData,
+      pendingName: pendingUserData?.name
+    });
+  }, [user, session, loading, needsProfileSetup, pendingUserData]);
 
   const value = {
     user,
