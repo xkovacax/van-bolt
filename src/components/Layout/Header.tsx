@@ -10,15 +10,15 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout, isAuthenticated, loading } = useAuth();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     onSearch?.(searchQuery);
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     setIsMenuOpen(false);
   };
 
@@ -46,7 +46,7 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search campers by location..."
+                placeholder="Hľadať campervany podľa lokality..."
                 className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
             </form>
@@ -57,44 +57,56 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
             {/* Rent Campers Button - Primary CTA */}
             <button className="flex items-center space-x-1 px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 transition-colors rounded-lg">
               <Car className="h-4 w-4" />
-              <span>Rent Campers</span>
+              <span>Prenajať Campervany</span>
             </button>
 
             {/* Owner CTA - Secondary */}
             <button className="flex items-center space-x-1 px-3 py-2 text-sm font-medium text-orange-600 hover:text-orange-700 transition-colors border border-orange-200 rounded-lg hover:bg-orange-50">
               <PlusCircle className="h-4 w-4" />
-              <span>List Your Camper</span>
+              <span>Pridať Campervan</span>
             </button>
 
-            {isAuthenticated ? (
+            {loading ? (
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-600"></div>
+            ) : isAuthenticated && user ? (
               <>
                 <button className="flex items-center space-x-1 px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
                   <Heart className="h-4 w-4" />
-                  <span>Favorites</span>
+                  <span>Obľúbené</span>
                 </button>
                 <button className="flex items-center space-x-1 px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
                   <Calendar className="h-4 w-4" />
-                  <span>Bookings</span>
+                  <span>Rezervácie</span>
                 </button>
                 <div className="relative">
                   <button 
                     onClick={() => setIsMenuOpen(!isMenuOpen)}
                     className="flex items-center space-x-2 p-2 rounded-full hover:bg-gray-100 transition-colors"
                   >
-                    <div className="w-8 h-8 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-full flex items-center justify-center">
-                      <User className="h-4 w-4 text-white" />
-                    </div>
-                    <span className="text-sm font-medium text-gray-700">{user?.name}</span>
+                    <img
+                      src={user.avatar}
+                      alt={user.name}
+                      className="w-8 h-8 rounded-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = `https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150`;
+                      }}
+                    />
+                    <span className="text-sm font-medium text-gray-700">{user.name}</span>
                   </button>
                   
                   {isMenuOpen && (
                     <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                      <div className="px-4 py-2 border-b border-gray-100">
+                        <p className="text-sm font-medium text-gray-900">{user.name}</p>
+                        <p className="text-xs text-gray-500">{user.email}</p>
+                      </div>
                       <button
                         onClick={handleLogout}
                         className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                       >
                         <LogOut className="h-4 w-4" />
-                        <span>Logout</span>
+                        <span>Odhlásiť sa</span>
                       </button>
                     </div>
                   )}
@@ -105,7 +117,7 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
                 onClick={onAuthClick}
                 className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
               >
-                Sign In
+                Prihlásiť sa
               </button>
             )}
           </div>
@@ -134,7 +146,7 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search campers..."
+                  placeholder="Hľadať campervany..."
                   className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                 />
               </form>
@@ -142,37 +154,50 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
               {/* Rent Campers - Mobile Primary CTA */}
               <button className="flex items-center space-x-2 w-full px-3 py-3 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 transition-colors rounded-lg">
                 <Car className="h-4 w-4" />
-                <span>Rent Campers</span>
+                <span>Prenajať Campervany</span>
               </button>
 
               {/* Owner CTA - Mobile */}
               <button className="flex items-center space-x-2 w-full px-3 py-2 text-sm font-medium text-orange-600 hover:text-orange-700 transition-colors border border-orange-200 rounded-lg hover:bg-orange-50">
                 <PlusCircle className="h-4 w-4" />
-                <span>List Your Camper</span>
+                <span>Pridať Campervan</span>
               </button>
               
-              {isAuthenticated ? (
+              {loading ? (
+                <div className="flex justify-center py-2">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-600"></div>
+                </div>
+              ) : isAuthenticated && user ? (
                 <>
                   <div className="flex items-center space-x-3 px-3 py-2">
-                    <div className="w-8 h-8 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-full flex items-center justify-center">
-                      <User className="h-4 w-4 text-white" />
+                    <img
+                      src={user.avatar}
+                      alt={user.name}
+                      className="w-8 h-8 rounded-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = `https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150`;
+                      }}
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{user.name}</p>
+                      <p className="text-xs text-gray-500">{user.email}</p>
                     </div>
-                    <span className="text-sm font-medium text-gray-900">{user?.name}</span>
                   </div>
                   <button className="flex items-center space-x-2 w-full px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
                     <Heart className="h-4 w-4" />
-                    <span>Favorites</span>
+                    <span>Obľúbené</span>
                   </button>
                   <button className="flex items-center space-x-2 w-full px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
                     <Calendar className="h-4 w-4" />
-                    <span>Bookings</span>
+                    <span>Rezervácie</span>
                   </button>
                   <button
                     onClick={handleLogout}
                     className="flex items-center space-x-2 w-full px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 transition-colors"
                   >
                     <LogOut className="h-4 w-4" />
-                    <span>Logout</span>
+                    <span>Odhlásiť sa</span>
                   </button>
                 </>
               ) : (
@@ -180,7 +205,7 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
                   onClick={onAuthClick}
                   className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
                 >
-                  Sign In
+                  Prihlásiť sa
                 </button>
               )}
             </div>

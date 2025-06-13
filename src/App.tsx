@@ -7,9 +7,10 @@ import CamperGrid from './components/Campers/CamperGrid';
 import CamperModal from './components/Campers/CamperModal';
 import FilterSidebar from './components/Filters/FilterSidebar';
 import AuthModal from './components/Auth/AuthModal';
+import AuthCallback from './components/Auth/AuthCallback';
 import { mockCampers } from './data/mockData';
 import { Camper } from './types';
-import { Filter, SlidersHorizontal } from 'lucide-react';
+import { SlidersHorizontal } from 'lucide-react';
 
 interface FilterOptions {
   priceRange: [number, number];
@@ -32,6 +33,15 @@ function App() {
     type: '',
     features: []
   });
+
+  // Check if we're on the auth callback route
+  if (window.location.pathname === '/auth/callback') {
+    return (
+      <AuthProvider>
+        <AuthCallback />
+      </AuthProvider>
+    );
+  }
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
@@ -102,7 +112,7 @@ function App() {
   };
 
   const handleBooking = (camper: Camper) => {
-    alert(`Booking request sent for ${camper.title}! You'll receive a confirmation email shortly.`);
+    alert(`Žiadosť o rezerváciu bola odoslaná pre ${camper.title}! Čoskoro dostanete potvrdzujúci e-mail.`);
   };
 
   return (
@@ -118,10 +128,10 @@ function App() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-2xl font-bold text-gray-900">
-                {searchQuery ? `Results for "${searchQuery}"` : 'Featured Campers'}
+                {searchQuery ? `Výsledky pre "${searchQuery}"` : 'Odporúčané Campervany'}
               </h2>
               <p className="text-gray-600 mt-1">
-                {campers.length} {campers.length === 1 ? 'camper' : 'campers'} available
+                {campers.length} {campers.length === 1 ? 'campervan' : 'campervanoch'} k dispozícii
               </p>
             </div>
             
@@ -130,7 +140,7 @@ function App() {
               className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors lg:hidden"
             >
               <SlidersHorizontal className="h-4 w-4" />
-              <span>Filters</span>
+              <span>Filtre</span>
             </button>
           </div>
           
