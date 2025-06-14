@@ -142,6 +142,60 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setLoading(false);
   };
 
+  // OPTIMIZED: Separate function to fetch user profile from database
+  const fetchUserProfile = async (userId: string): Promise<User | null> => {
+    console.log('📊 Fetching user profile from database for:', userId);
+    
+    try {
+      const queryStartTime = Date.now();
+      
+      const queryPromise = supabase
+        .from('users')
+        .select('id, name, email, role, avatar, rating, review_count')
+        .eq('id', userId)
+        .limit(1)
+        .maybeSingle();
+
+      // 3 second timeout
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Database query timeout (3s)'));
+        }, 3000);
+      });
+
+      const { data: userProfile, error: dbError } = await Promise.race([
+        queryPromise,
+        timeoutPromise
+      ]) as any;
+
+      const queryTime = Date.now() - queryStartTime;
+      console.log(`📊 Profile fetch completed in ${queryTime}ms`);
+
+      if (dbError) {
+        console.error('❌ Error fetching user profile:', dbError);
+        return null;
+      }
+
+      if (userProfile) {
+        console.log('✅ User profile fetched successfully:', userProfile);
+        return {
+          id: userProfile.id,
+          name: userProfile.name || 'User',
+          email: userProfile.email || '',
+          role: userProfile.role,
+          avatar: userProfile.avatar,
+          rating: userProfile.rating,
+          reviewCount: userProfile.review_count
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.error('❌ Error in fetchUserProfile:', error);
+      return null;
+    }
+  };
+
   const handleUserSession = async (supabaseUser: SupabaseUser) => {
     console.log('👤 ===== STARTING handleUserSession =====');
     console.log('👤 User ID:', supabaseUser.id);
@@ -150,8 +204,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       console.log('📊 STEP 1: Checking user profile in database...');
       
-      const queryStartTime = Date.now();
-      
       // Check for preferred role from localStorage (Google OAuth flow)
       // CRITICAL: Don't remove it yet - only read it
       const preferredRole = getPreferredRole();
@@ -159,111 +211,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.log('🎯 Found preferred role from localStorage (keeping for modal):', preferredRole);
       }
       
-      // ULTRA-FAST QUERY: Reduced timeout to 3 seconds and optimized query
-      console.log('📊 Creating ULTRA-FAST query with 3 second timeout...');
-      
-      const queryPromise = supabase
-        .from('users')
-        .select('id, name, email, role, avatar, rating, review_count')
-        .eq('id', supabaseUser.id)
-        .limit(1) // Add limit for faster query
-        .maybeSingle();
-
-      // AGGRESSIVE timeout - 3 seconds max
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => {
-          console.log('⏰ AGGRESSIVE TIMEOUT: Database query timeout after 3 seconds');
-          reject(new Error('Database query timeout (3s) - connection too slow'));
-        }, 3000);
-      });
-
-      console.log('📊 Executing ULTRA-FAST query with 3s timeout...');
-      
-      let result;
-      try {
-        result = await Promise.race([
-          queryPromise,
-          timeoutPromise
-        ]) as any;
-      } catch (timeoutError) {
-        console.error('⏰ TIMEOUT ERROR:', timeoutError.message);
-        
-        // On timeout, immediately create fallback user to prevent hanging
-        console.log('🚨 TIMEOUT FALLBACK: Creating immediate fallback user');
-        createFallbackUser(supabaseUser);
-        
-        console.log('🎯 MODAL CHECK: Timeout fallback created', {
-          needsSetup: false,
-          hasPendingData: false,
-          modalShouldShow: false,
-          reason: 'timeout_fallback',
-          timestamp: new Date().toISOString()
-        });
-        return;
-      }
-
-      const { data: userProfile, error: dbError } = result;
-      const queryTime = Date.now() - queryStartTime;
-      
-      console.log(`📊 Database query completed in ${queryTime}ms`);
-      console.log('📊 Query result:', { 
-        hasData: !!userProfile, 
-        hasError: !!dbError,
-        errorCode: dbError?.code,
-        errorMessage: dbError?.message 
-      });
-
-      // SYNCHRONOUS MODAL RENDER CHECK - AFTER QUERY COMPLETION
-      console.log('🎯 ===== MODAL RENDER CHECK (SYNCHRONOUS AFTER QUERY) =====');
-      
-      // Handle database errors
-      if (dbError) {
-        console.log('❌ Database error:', {
-          code: dbError.code,
-          message: dbError.message,
-          queryTime: `${queryTime}ms`
-        });
-        
-        // Check if it's a "not found" type error or table doesn't exist
-        if (dbError.code === 'PGRST116' || 
-            dbError.message?.includes('not found') || 
-            dbError.message?.includes('no rows') ||
-            dbError.code === '42P01' || // Table doesn't exist
-            dbError.message?.includes('relation') ||
-            dbError.message?.includes('does not exist')) {
-          
-          console.log('🎯 User profile not found or table missing - needs setup');
-          const pendingData = setupPendingProfile(supabaseUser, preferredRole);
-          
-          // SYNCHRONOUS CHECK AFTER SETTING PENDING DATA
-          console.log('🎯 MODAL CHECK: Profile setup needed', {
-            needsSetup: true,
-            hasPendingData: !!pendingData,
-            modalShouldShow: true,
-            reason: 'profile_not_found',
-            timestamp: new Date().toISOString()
-          });
-        } else {
-          // Other database errors - create fallback user to prevent modal flash
-          console.log('⚠️ Database error but not "not found" - creating fallback user');
-          createFallbackUser(supabaseUser);
-          
-          // SYNCHRONOUS CHECK AFTER CREATING FALLBACK
-          console.log('🎯 MODAL CHECK: Fallback user created', {
-            needsSetup: false,
-            hasPendingData: false,
-            modalShouldShow: false,
-            reason: 'database_error_fallback',
-            timestamp: new Date().toISOString()
-          });
-        }
-        return;
-      }
+      // Fetch user profile using the optimized function
+      const userProfile = await fetchUserProfile(supabaseUser.id);
 
       // Check if user profile exists
       if (userProfile) {
-        console.log(`✅ User profile found in ${queryTime}ms`);
-        console.log('✅ Profile data:', userProfile);
+        console.log('✅ User profile found and loaded');
         
         // CRITICAL: Clean up preferred role ONLY when user profile exists
         if (preferredRole) {
@@ -272,37 +225,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
         
         // Set user and ensure modal state is cleared
-        setUser({
-          id: userProfile.id,
-          name: userProfile.name || 'User',
-          email: userProfile.email || '',
-          role: userProfile.role,
-          avatar: userProfile.avatar,
-          rating: userProfile.rating,
-          reviewCount: userProfile.review_count
-        });
+        setUser(userProfile);
         
         // Clear any pending modal state
         setNeedsProfileSetup(false);
         setPendingUserData(null);
         setLoading(false);
         
-        // SYNCHRONOUS CHECK AFTER SETTING USER
         console.log('🎯 MODAL CHECK: User profile loaded', {
           needsSetup: false,
           hasPendingData: false,
           modalShouldShow: false,
           hasUser: true,
           userName: userProfile.name,
+          userRole: userProfile.role,
           reason: 'profile_found',
           timestamp: new Date().toISOString()
         });
       } else {
         // No profile found - need profile setup
-        console.log(`🎯 No profile found in ${queryTime}ms - triggering setup modal`);
+        console.log('🎯 No profile found - triggering setup modal');
         const pendingData = setupPendingProfile(supabaseUser, preferredRole);
         
-        // SYNCHRONOUS CHECK AFTER SETTING UP PROFILE
         console.log('🎯 MODAL CHECK: No profile found, setup needed', {
           needsSetup: true,
           hasPendingData: !!pendingData,
@@ -313,17 +257,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     } catch (error) {
       console.error('❌ CRITICAL ERROR in handleUserSession:', error);
-      console.error('❌ Error details:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      });
       
       // On critical error, create fallback user to prevent modal flash
       console.log('🎯 CRITICAL ERROR FALLBACK: Creating fallback user');
       createFallbackUser(supabaseUser);
       
-      // SYNCHRONOUS CHECK AFTER CRITICAL ERROR
       console.log('🎯 MODAL CHECK: Critical error, fallback created', {
         needsSetup: false,
         hasPendingData: false,
@@ -460,17 +398,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       });
 
-      // Set the user in state immediately
-      console.log('🔨 Setting user state...');
-      setUser({
+      // CRITICAL FIX: Set the user state with the ACTUAL data from database
+      console.log('🔨 Setting user state with database data...');
+      const userFromDb = {
         id: newUser.id,
         name: newUser.name,
         email: newUser.email,
-        role: newUser.role,
+        role: newUser.role, // This ensures the correct role is displayed
         avatar: newUser.avatar,
         rating: newUser.rating,
         reviewCount: newUser.review_count
-      });
+      };
+      
+      console.log('🎯 Setting user with role:', userFromDb.role);
+      setUser(userFromDb);
 
       // Clear pending setup - CRITICAL for preventing modal flash
       console.log('🔨 Clearing pending setup state...');
@@ -483,7 +424,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         hasPendingData: false,
         modalShouldShow: false,
         hasUser: true,
-        userName: newUser.name,
+        userName: userFromDb.name,
+        userRole: userFromDb.role,
         reason: 'profile_created',
         timestamp: new Date().toISOString()
       });
@@ -601,9 +543,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setNeedsProfileSetup(false);
     setPendingUserData(null);
   };
-
-  // REMOVED ASYNC useEffect - Modal checks are now synchronous in handleUserSession
-  // This prevents race conditions and ensures modal state is checked after query completion
 
   const value = {
     user,
