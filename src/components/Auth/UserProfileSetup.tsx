@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, User as UserIcon, Camera } from 'lucide-react';
+import { X, User as UserIcon, Camera, Car, PlusCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface UserProfileSetupProps {
@@ -96,10 +96,17 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ isOpen, onClose, us
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
+    });
+  };
+
+  const handleRoleChange = (role: 'owner' | 'customer') => {
+    setFormData({
+      ...formData,
+      role
     });
   };
 
@@ -177,28 +184,111 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ isOpen, onClose, us
             </div>
           </div>
 
-          {/* Role Selection */}
+          {/* Role Selection with Radio Button Design */}
           <div>
-            <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-3">
               Chcem *
             </label>
-            <select
-              id="role"
-              name="role"
-              value={formData.role}
-              onChange={handleInputChange}
-              className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-sm"
-            >
-              <option value="customer">Prenajímať campervany</option>
-              <option value="owner">Pridať svoj campervan</option>
-            </select>
+            <div className="grid grid-cols-2 gap-3">
+              {/* Rent Campers Option */}
+              <label className="relative cursor-pointer">
+                <input
+                  type="radio"
+                  name="role"
+                  value="customer"
+                  checked={formData.role === 'customer'}
+                  onChange={() => handleRoleChange('customer')}
+                  className="sr-only"
+                />
+                <div className={`
+                  flex flex-col items-center p-4 rounded-xl border-2 transition-all duration-200
+                  ${formData.role === 'customer' 
+                    ? 'border-emerald-500 bg-emerald-50 shadow-md' 
+                    : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                  }
+                `}>
+                  <div className={`
+                    w-12 h-12 rounded-full flex items-center justify-center mb-2 transition-colors
+                    ${formData.role === 'customer' 
+                      ? 'bg-emerald-500 text-white' 
+                      : 'bg-gray-100 text-gray-600'
+                    }
+                  `}>
+                    <Car className="h-6 w-6" />
+                  </div>
+                  <span className={`
+                    text-sm font-medium text-center leading-tight
+                    ${formData.role === 'customer' ? 'text-emerald-700' : 'text-gray-700'}
+                  `}>
+                    Prenajať<br />Karavan
+                  </span>
+                  {formData.role === 'customer' && (
+                    <div className="absolute top-2 right-2 w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center">
+                      <div className="w-2 h-2 bg-white rounded-full"></div>
+                    </div>
+                  )}
+                </div>
+              </label>
+
+              {/* Add Camper Option */}
+              <label className="relative cursor-pointer">
+                <input
+                  type="radio"
+                  name="role"
+                  value="owner"
+                  checked={formData.role === 'owner'}
+                  onChange={() => handleRoleChange('owner')}
+                  className="sr-only"
+                />
+                <div className={`
+                  flex flex-col items-center p-4 rounded-xl border-2 transition-all duration-200
+                  ${formData.role === 'owner' 
+                    ? 'border-orange-500 bg-orange-50 shadow-md' 
+                    : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                  }
+                `}>
+                  <div className={`
+                    w-12 h-12 rounded-full flex items-center justify-center mb-2 transition-colors
+                    ${formData.role === 'owner' 
+                      ? 'bg-orange-500 text-white' 
+                      : 'bg-gray-100 text-gray-600'
+                    }
+                  `}>
+                    <PlusCircle className="h-6 w-6" />
+                  </div>
+                  <span className={`
+                    text-sm font-medium text-center leading-tight
+                    ${formData.role === 'owner' ? 'text-orange-700' : 'text-gray-700'}
+                  `}>
+                    Pridať<br />Karavan
+                  </span>
+                  {formData.role === 'owner' && (
+                    <div className="absolute top-2 right-2 w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center">
+                      <div className="w-2 h-2 bg-white rounded-full"></div>
+                    </div>
+                  )}
+                </div>
+              </label>
+            </div>
+            <p className="text-xs text-gray-500 mt-2 text-center">
+              {formData.role === 'customer' 
+                ? 'Hľadáte karavan na prenájom pre vašu dovolenku' 
+                : 'Chcete zarábať prenajímaním svojho karavanu'
+              }
+            </p>
           </div>
 
           {/* Submit Button */}
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-emerald-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+            className={`
+              w-full py-3 px-4 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg
+              ${formData.role === 'customer' 
+                ? 'bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-500' 
+                : 'bg-orange-600 text-white hover:bg-orange-700 focus:ring-orange-500'
+              }
+            `}
           >
             {isLoading ? 'Vytváram profil...' : 'Dokončiť registráciu'}
           </button>
@@ -219,6 +309,7 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ isOpen, onClose, us
             <div>Email: {userData.email}</div>
             <div>Name: {userData.name}</div>
             <div>Avatar: {userData.avatar ? 'Yes' : 'No'}</div>
+            <div>Selected Role: {formData.role}</div>
           </div>
         )}
       </div>
