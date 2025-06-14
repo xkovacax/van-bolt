@@ -35,7 +35,18 @@ const AppContent: React.FC = () => {
     features: []
   });
 
-  const { needsProfileSetup, pendingUserData, completePendingSetup } = useAuth();
+  const { needsProfileSetup, pendingUserData, loading } = useAuth();
+
+  // Enhanced logging for modal visibility
+  React.useEffect(() => {
+    console.log('🎯 APP COMPONENT STATE:', {
+      needsProfileSetup,
+      hasPendingUserData: !!pendingUserData,
+      pendingUserName: pendingUserData?.name,
+      loading,
+      modalShouldShow: needsProfileSetup && pendingUserData && !loading
+    });
+  }, [needsProfileSetup, pendingUserData, loading]);
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
@@ -111,9 +122,18 @@ const AppContent: React.FC = () => {
 
   const handleProfileSetupClose = () => {
     // Don't allow closing without completing setup
-    // User must complete the profile setup
     console.log('⚠️ Profile setup cannot be closed without completion');
   };
+
+  // Show modal conditions
+  const shouldShowProfileModal = needsProfileSetup && pendingUserData && !loading;
+  
+  console.log('🎯 MODAL RENDER CHECK:', {
+    shouldShowProfileModal,
+    needsProfileSetup,
+    hasPendingUserData: !!pendingUserData,
+    loading
+  });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -181,13 +201,16 @@ const AppContent: React.FC = () => {
         onClose={() => setIsAuthModalOpen(false)}
       />
 
-      {/* User Profile Setup Modal - CRITICAL: This must show when needsProfileSetup is true */}
-      {needsProfileSetup && pendingUserData && (
-        <UserProfileSetup
-          isOpen={true}
-          onClose={handleProfileSetupClose}
-          userData={pendingUserData}
-        />
+      {/* User Profile Setup Modal - ENHANCED VISIBILITY */}
+      {shouldShowProfileModal && (
+        <>
+          {console.log('🚨 RENDERING PROFILE SETUP MODAL!')}
+          <UserProfileSetup
+            isOpen={true}
+            onClose={handleProfileSetupClose}
+            userData={pendingUserData}
+          />
+        </>
       )}
       
       {/* Mobile Filter Sidebar */}
@@ -198,13 +221,29 @@ const AppContent: React.FC = () => {
         onFiltersChange={handleFiltersChange}
       />
 
-      {/* Debug Panel - Development Only */}
+      {/* Enhanced Debug Panel - Development Only */}
       {process.env.NODE_ENV === 'development' && (
-        <div className="fixed bottom-4 right-4 bg-black bg-opacity-75 text-white p-3 rounded text-xs max-w-xs">
-          <div className="font-bold mb-2">🔍 Auth Debug</div>
-          <div>Profile Setup: {needsProfileSetup ? '✅' : '❌'}</div>
-          <div>Pending Data: {pendingUserData ? '✅' : '❌'}</div>
-          <div>Pending Name: {pendingUserData?.name || 'N/A'}</div>
+        <div className="fixed bottom-4 right-4 bg-black bg-opacity-90 text-white p-4 rounded-lg text-xs max-w-sm z-[60]">
+          <div className="font-bold mb-2 text-yellow-400">🔍 Auth Debug Panel</div>
+          <div className="space-y-1">
+            <div>Loading: {loading ? '⏳ YES' : '✅ NO'}</div>
+            <div>Profile Setup: {needsProfileSetup ? '✅ YES' : '❌ NO'}</div>
+            <div>Pending Data: {pendingUserData ? '✅ YES' : '❌ NO'}</div>
+            <div>Pending Name: {pendingUserData?.name || 'N/A'}</div>
+            <div>Pending Email: {pendingUserData?.email || 'N/A'}</div>
+            <div className="border-t border-gray-600 pt-2 mt-2">
+              <div className={`font-bold ${shouldShowProfileModal ? 'text-green-400' : 'text-red-400'}`}>
+                Modal Should Show: {shouldShowProfileModal ? '✅ YES' : '❌ NO'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Force Modal Visibility Test - Development Only */}
+      {process.env.NODE_ENV === 'development' && shouldShowProfileModal && (
+        <div className="fixed top-4 left-4 bg-green-600 text-white p-2 rounded text-xs z-[70]">
+          🚨 MODAL IS ACTIVE!
         </div>
       )}
     </div>

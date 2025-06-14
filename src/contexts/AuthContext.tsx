@@ -40,6 +40,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [pendingUserData, setPendingUserData] = useState<any>(null);
 
   useEffect(() => {
+    console.log('🚀 AuthProvider initializing...');
+    
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       console.log('🔄 Initial session check:', session?.user?.id);
@@ -79,6 +81,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const handleUserSession = async (supabaseUser: SupabaseUser) => {
     try {
       console.log('👤 Handling user session for:', supabaseUser.id);
+      console.log('👤 User metadata:', supabaseUser.user_metadata);
       
       // Check if user profile exists in database
       const { data: userProfile, error } = await supabase
@@ -91,7 +94,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       if (error && error.code === 'PGRST116') {
         // User profile doesn't exist - need profile setup
-        console.log('❌ User profile not found - triggering setup');
+        console.log('❌ User profile not found - triggering setup modal');
         
         const userData = {
           id: supabaseUser.id,
@@ -104,10 +107,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         };
         
         console.log('📝 Setting up profile with data:', userData);
+        console.log('🎯 Setting needsProfileSetup = true');
+        
         setPendingUserData(userData);
         setNeedsProfileSetup(true);
         setUser(null);
         setLoading(false);
+        
+        // Force a re-render to ensure modal shows
+        setTimeout(() => {
+          console.log('🔄 Force state check - needsProfileSetup:', true);
+          console.log('🔄 Force state check - pendingUserData:', userData);
+        }, 100);
+        
         return;
       } 
       
@@ -299,17 +311,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setPendingUserData(null);
   };
 
-  // Debug logging for state changes
+  // Enhanced debug logging for state changes
   useEffect(() => {
-    console.log('🔍 Auth State:', {
+    console.log('🔍 AUTH STATE UPDATE:', {
       hasUser: !!user,
       userName: user?.name,
       hasSession: !!session,
+      sessionUserId: session?.user?.id,
       loading,
       needsProfileSetup,
       hasPendingData: !!pendingUserData,
-      pendingName: pendingUserData?.name
+      pendingName: pendingUserData?.name,
+      pendingEmail: pendingUserData?.email
     });
+    
+    // CRITICAL: Log when modal should show
+    if (needsProfileSetup && pendingUserData) {
+      console.log('🚨 MODAL SHOULD BE VISIBLE NOW!');
+      console.log('🚨 Modal conditions met:', {
+        needsProfileSetup: true,
+        pendingUserData: !!pendingUserData
+      });
+    }
   }, [user, session, loading, needsProfileSetup, pendingUserData]);
 
   const value = {

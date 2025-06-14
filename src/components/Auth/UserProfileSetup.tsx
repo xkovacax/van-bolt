@@ -22,8 +22,23 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ isOpen, onClose, us
   const [error, setError] = useState<string | null>(null);
   const { createUserProfile } = useAuth();
 
-  // Don't render if no userData
-  if (!userData) return null;
+  // Enhanced logging
+  React.useEffect(() => {
+    console.log('🎯 UserProfileSetup render:', {
+      isOpen,
+      hasUserData: !!userData,
+      userName: userData?.name,
+      userEmail: userData?.email
+    });
+  }, [isOpen, userData]);
+
+  // Don't render if not open or no userData
+  if (!isOpen || !userData) {
+    console.log('❌ UserProfileSetup not rendering:', { isOpen, hasUserData: !!userData });
+    return null;
+  }
+
+  console.log('✅ UserProfileSetup IS RENDERING!');
 
   const generateAvatar = (name: string) => {
     const initials = name
@@ -58,7 +73,7 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ isOpen, onClose, us
     }
 
     try {
-      console.log('Submitting profile setup:', formData);
+      console.log('🔨 Submitting profile setup:', formData);
       
       const { error: profileError } = await createUserProfile({
         name: formData.name.trim(),
@@ -66,15 +81,15 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ isOpen, onClose, us
       });
 
       if (profileError) {
-        console.error('Profile creation error:', profileError);
+        console.error('❌ Profile creation error:', profileError);
         setError('Chyba pri vytváraní profilu. Skúste to znovu.');
         return;
       }
 
-      console.log('Profile created successfully');
-      onClose();
+      console.log('✅ Profile created successfully');
+      // Don't call onClose here - let the auth context handle the state change
     } catch (error) {
-      console.error('Profile setup error:', error);
+      console.error('❌ Profile setup error:', error);
       setError('Nastala neočakávaná chyba. Skúste to znovu.');
     } finally {
       setIsLoading(false);
@@ -88,15 +103,14 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ isOpen, onClose, us
     });
   };
 
-  if (!isOpen) return null;
-
   const avatarPreview = generateAvatar(formData.name || 'User');
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl max-w-md w-full p-6 relative">
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[100]">
+      <div className="bg-white rounded-2xl max-w-md w-full p-6 relative shadow-2xl">
+        {/* Header with enhanced visibility */}
         <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
             <span className="text-white font-bold text-xl">MC</span>
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
@@ -121,18 +135,18 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ isOpen, onClose, us
                 <img
                   src={userData.avatar}
                   alt="Avatar"
-                  className="w-20 h-20 rounded-full object-cover mx-auto"
+                  className="w-20 h-20 rounded-full object-cover mx-auto shadow-lg"
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
                     target.style.display = 'none';
                   }}
                 />
               ) : (
-                <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto text-white font-bold text-xl ${avatarPreview.colorClass}`}>
+                <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto text-white font-bold text-xl shadow-lg ${avatarPreview.colorClass}`}>
                   {avatarPreview.initials}
                 </div>
               )}
-              <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-600 rounded-full flex items-center justify-center">
+              <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-600 rounded-full flex items-center justify-center shadow-lg">
                 <Camera className="h-3 w-3 text-white" />
               </div>
             </div>
@@ -157,7 +171,7 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ isOpen, onClose, us
                 required
                 value={formData.name}
                 onChange={handleInputChange}
-                className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-sm"
                 placeholder="Zadajte svoje celé meno"
               />
             </div>
@@ -173,7 +187,7 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ isOpen, onClose, us
               name="role"
               value={formData.role}
               onChange={handleInputChange}
-              className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-sm"
             >
               <option value="customer">Prenajímať campervany</option>
               <option value="owner">Pridať svoj campervan</option>
@@ -184,7 +198,7 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ isOpen, onClose, us
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-emerald-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-emerald-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
           >
             {isLoading ? 'Vytváram profil...' : 'Dokončiť registráciu'}
           </button>
@@ -196,6 +210,17 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ isOpen, onClose, us
           {' '}a{' '}
           <a href="#" className="text-emerald-600 hover:text-emerald-700">Zásadami ochrany súkromia</a>
         </div>
+
+        {/* Development debug info */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mt-4 p-2 bg-gray-100 rounded text-xs">
+            <div className="font-bold">Debug Info:</div>
+            <div>User ID: {userData.id}</div>
+            <div>Email: {userData.email}</div>
+            <div>Name: {userData.name}</div>
+            <div>Avatar: {userData.avatar ? 'Yes' : 'No'}</div>
+          </div>
+        )}
       </div>
     </div>
   );
