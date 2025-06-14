@@ -61,20 +61,69 @@ const getPreferredRole = (): 'owner' | 'customer' | null => {
   }
 };
 
-// Helper function to clean up expired preferred role
-const cleanupExpiredPreferredRole = () => {
+// Helper function to check if profile was just created (prevents modal re-showing)
+const wasProfileJustCreated = (): boolean => {
   try {
-    const storedData = localStorage.getItem('preferredRole');
-    if (storedData) {
-      const { expiry } = JSON.parse(storedData);
+    const storedData = localStorage.getItem('profileJustCreated');
+    if (!storedData) {
+      return false;
+    }
+
+    const { created, expiry } = JSON.parse(storedData);
+    
+    // Check if the flag has expired (2 minutes)
+    if (Date.now() > expiry) {
+      console.log('🕒 Profile creation flag expired, removing from localStorage');
+      localStorage.removeItem('profileJustCreated');
+      return false;
+    }
+
+    console.log('🔒 Profile was just created, preventing modal for:', Math.round((expiry - Date.now()) / 1000) + ' seconds');
+    return created;
+  } catch (error) {
+    console.error('❌ Error reading profile creation flag from localStorage:', error);
+    localStorage.removeItem('profileJustCreated');
+    return false;
+  }
+};
+
+// Helper function to set profile creation flag
+const setProfileJustCreated = () => {
+  const expiryTime = Date.now() + (2 * 60 * 1000); // 2 minutes from now
+  const flagData = {
+    created: true,
+    expiry: expiryTime
+  };
+  localStorage.setItem('profileJustCreated', JSON.stringify(flagData));
+  console.log('🔒 Set profile creation flag with 2-minute expiry:', new Date(expiryTime));
+};
+
+// Helper function to clean up expired flags
+const cleanupExpiredFlags = () => {
+  try {
+    // Clean up preferred role
+    const preferredRoleData = localStorage.getItem('preferredRole');
+    if (preferredRoleData) {
+      const { expiry } = JSON.parse(preferredRoleData);
       if (Date.now() > expiry) {
         console.log('🧹 Cleaning up expired preferred role');
         localStorage.removeItem('preferredRole');
       }
     }
+
+    // Clean up profile creation flag
+    const profileCreatedData = localStorage.getItem('profileJustCreated');
+    if (profileCreatedData) {
+      const { expiry } = JSON.parse(profileCreatedData);
+      if (Date.now() > expiry) {
+        console.log('🧹 Cleaning up expired profile creation flag');
+        localStorage.removeItem('profileJustCreated');
+      }
+    }
   } catch (error) {
-    console.error('❌ Error cleaning up preferred role:', error);
+    console.error('❌ Error cleaning up expired flags:', error);
     localStorage.removeItem('preferredRole');
+    localStorage.removeItem('profileJustCreated');
   }
 };
 
@@ -84,15 +133,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [needsProfileSetup, setNeedsProfileSetup] = useState(false);
   const [pendingUserData, setPendingUserData] = useState<any>(null);
-  
-  // CRITICAL: Track if we just created a profile to prevent modal re-showing
-  const [justCreatedProfile, setJustCreatedProfile] = useState(false);
 
   useEffect(() => {
     console.log('🚀 AuthProvider initializing...');
     
-    // Clean up any expired preferred roles on startup
-    cleanupExpiredPreferredRole();
+    // Clean up any expired flags on startup
+    cleanupExpiredFlags();
     
     // Get initial session
     supabase.auth.getSession().then(({ data: { session }, error }) => {
@@ -142,7 +188,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUser(null);
     setNeedsProfileSetup(false);
     setPendingUserData(null);
-    setJustCreatedProfile(false);
     setLoading(false);
   };
 
@@ -204,11 +249,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('👤 ===== STARTING handleUserSession =====');
     console.log('👤 User ID:', supabaseUser.id);
     console.log('👤 User email:', supabaseUser.email);
-    console.log('🔒 Just created profile flag:', justCreatedProfile);
     
-    // CRITICAL: If we just created a profile, skip the modal logic entirely
-    if (justCreatedProfile) {
-      console.log('🚫 SKIPPING modal logic - profile was just created');
+    // CRITICAL: Check if profile was just created using localStorage
+    const profileJustCreated = wasProfileJustCreated();
+    if (profileJustCreated) {
+      console.log('🚫 SKIPPING modal logic - profile was just created (localStorage check)');
       
       // Fetch the fresh profile from database
       const userProfile = await fetchUserProfile(supabaseUser.id);
@@ -219,9 +264,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setPendingUserData(null);
         setLoading(false);
         
-        // Reset the flag after successful load
-        setJustCreatedProfile(false);
-        
         console.log('🎯 MODAL CHECK: Profile just created, user loaded', {
           needsSetup: false,
           hasPendingData: false,
@@ -229,7 +271,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           hasUser: true,
           userName: userProfile.name,
           userRole: userProfile.role,
-          reason: 'just_created_profile',
+          reason: 'just_created_profile_localStorage',
           timestamp: new Date().toISOString()
         });
         
@@ -237,7 +279,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return;
       } else {
         console.error('❌ Failed to fetch profile after creation - falling back to normal flow');
-        setJustCreatedProfile(false);
       }
     }
     
@@ -245,7 +286,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log('📊 STEP 1: Checking user profile in database...');
       
       // Check for preferred role from localStorage (Google OAuth flow)
-      // CRITICAL: Don't remove it yet - only read it
       const preferredRole = getPreferredRole();
       if (preferredRole) {
         console.log('🎯 Found preferred role from localStorage (keeping for modal):', preferredRole);
@@ -329,7 +369,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     });
     setNeedsProfileSetup(false);
     setPendingUserData(null);
-    setJustCreatedProfile(false);
     setLoading(false);
   };
 
@@ -353,7 +392,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setPendingUserData(userData);
     setNeedsProfileSetup(true);
     setUser(null);
-    setJustCreatedProfile(false);
     setLoading(false);
     
     console.log('🎯 Profile setup modal should now show');
@@ -422,9 +460,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       console.log('✅ User profile created successfully:', newUser);
 
-      // CRITICAL: Set the flag to prevent modal re-showing
-      console.log('🔒 Setting justCreatedProfile flag to prevent modal re-showing');
-      setJustCreatedProfile(true);
+      // CRITICAL: Set localStorage flag to prevent modal re-showing after redirect
+      console.log('🔒 Setting localStorage flag to prevent modal re-showing');
+      setProfileJustCreated();
 
       // CRITICAL: Clean up preferred role ONLY after successful profile creation
       console.log('🧹 Profile created successfully - cleaning up preferred role from localStorage');
@@ -472,7 +510,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         hasUser: true,
         userName: userFromDb.name,
         userRole: userFromDb.role,
-        justCreatedProfile: true,
+        localStorageFlag: true,
         reason: 'profile_created',
         timestamp: new Date().toISOString()
       });
@@ -482,7 +520,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return { error: null };
     } catch (error) {
       console.error('❌ Profile creation error:', error);
-      setJustCreatedProfile(false);
       console.log('🔨 ===== ENDING createUserProfile (ERROR) =====');
       return { error };
     }
@@ -522,8 +559,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('👋 Logging out user');
     setLoading(true);
     
-    // Clean up any stored preferred role on logout
+    // Clean up any stored flags on logout
     localStorage.removeItem('preferredRole');
+    localStorage.removeItem('profileJustCreated');
     
     await supabase.auth.signOut();
     resetAuthState();
@@ -577,8 +615,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (userError) {
           console.error('Error creating user profile:', userError);
         } else {
-          // Set flag to prevent modal showing after regular registration
-          setJustCreatedProfile(true);
+          // Set localStorage flag to prevent modal showing after regular registration
+          setProfileJustCreated();
         }
       } catch (error) {
         console.error('Profile creation timeout or error:', error);
@@ -593,7 +631,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('❌ Cancelling profile setup');
     setNeedsProfileSetup(false);
     setPendingUserData(null);
-    setJustCreatedProfile(false);
   };
 
   const value = {
