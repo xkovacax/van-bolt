@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthProvider';
 
 const AuthCallback: React.FC = () => {
   const { session, loading, needsProfileSetup, pendingUserData } = useAuth();
