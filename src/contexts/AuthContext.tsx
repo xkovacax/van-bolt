@@ -94,29 +94,36 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const handleUserSession = async (supabaseUser: SupabaseUser) => {
-    console.log('👤 Starting handleUserSession for:', supabaseUser.id);
+    console.log('👤 ===== STARTING handleUserSession =====');
+    console.log('👤 User ID:', supabaseUser.id);
+    console.log('👤 User email:', supabaseUser.email);
+    console.log('👤 User metadata:', supabaseUser.user_metadata);
     
     try {
-      console.log('👤 User metadata:', supabaseUser.user_metadata);
+      // STEP 1: Check if user profile exists in database
+      console.log('📊 STEP 1: Checking user profile in database...');
       
-      // Check if user profile exists in database
-      console.log('📊 Checking user profile in database...');
-      const { data: userProfile, error } = await supabase
+      const { data: userProfile, error: dbError } = await supabase
         .from('users')
         .select('*')
         .eq('id', supabaseUser.id)
         .single();
 
-      console.log('📊 Database query result:', { 
+      console.log('📊 Database query completed');
+      console.log('📊 Query result:', { 
         hasProfile: !!userProfile, 
-        error: error?.code,
-        errorMessage: error?.message 
+        error: dbError?.code,
+        errorMessage: dbError?.message,
+        profileData: userProfile
       });
 
-      if (error) {
-        if (error.code === 'PGRST116') {
+      // STEP 2: Handle database response
+      if (dbError) {
+        console.log('❌ Database error detected:', dbError.code);
+        
+        if (dbError.code === 'PGRST116') {
           // User profile doesn't exist - need profile setup
-          console.log('❌ User profile not found - triggering setup modal');
+          console.log('🎯 STEP 2A: User profile not found - triggering setup modal');
           
           const userData = {
             id: supabaseUser.id,
@@ -128,25 +135,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                     supabaseUser.user_metadata?.picture
           };
           
-          console.log('📝 Setting up profile with data:', userData);
+          console.log('📝 Prepared user data for setup:', userData);
           console.log('🎯 Setting needsProfileSetup = true');
+          console.log('🎯 Setting pendingUserData');
+          console.log('🎯 Setting loading = false');
           
           setPendingUserData(userData);
           setNeedsProfileSetup(true);
           setUser(null);
           setLoading(false);
           
+          console.log('✅ Profile setup state configured');
           return;
         } else {
           // Other database error
-          console.error('❌ Database error:', error);
+          console.error('❌ STEP 2B: Other database error:', dbError);
           setLoading(false);
           return;
         }
       }
 
+      // STEP 3: User profile exists
       if (userProfile) {
-        console.log('✅ User profile found:', userProfile.name);
+        console.log('✅ STEP 3: User profile found');
+        console.log('✅ Profile data:', userProfile);
+        
         setUser({
           id: userProfile.id,
           name: userProfile.name || 'User',
@@ -158,23 +171,34 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         });
         setNeedsProfileSetup(false);
         setPendingUserData(null);
+        setLoading(false);
+        
+        console.log('✅ User state updated successfully');
       }
     } catch (error) {
-      console.error('❌ Error in handleUserSession:', error);
-    } finally {
-      console.log('✅ Setting loading to false');
+      console.error('❌ CRITICAL ERROR in handleUserSession:', error);
+      console.error('❌ Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
       setLoading(false);
     }
+    
+    console.log('👤 ===== ENDING handleUserSession =====');
   };
 
   const createUserProfile = async (userData: { name: string; role: 'owner' | 'customer' }) => {
+    console.log('🔨 ===== STARTING createUserProfile =====');
+    
     if (!pendingUserData) {
       console.error('❌ No pending user data for profile creation');
       return { error: 'No pending user data' };
     }
 
     try {
-      console.log('🔨 Creating user profile:', userData);
+      console.log('🔨 Creating user profile with data:', userData);
+      console.log('🔨 Pending user data:', pendingUserData);
       
       // Generate default avatar if none provided
       let avatarUrl = pendingUserData.avatar;
@@ -183,6 +207,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       // Create user profile in database
+      console.log('🔨 Inserting into database...');
       const { data: newUser, error: dbError } = await supabase
         .from('users')
         .insert([
@@ -204,9 +229,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return { error: dbError };
       }
 
-      console.log('✅ User profile created successfully:', newUser.name);
+      console.log('✅ User profile created successfully:', newUser);
 
       // Update auth metadata
+      console.log('🔨 Updating auth metadata...');
       const { error: updateError } = await supabase.auth.updateUser({
         data: {
           full_name: userData.name.trim(),
@@ -219,6 +245,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       // Set the user in state
+      console.log('🔨 Setting user state...');
       setUser({
         id: newUser.id,
         name: newUser.name,
@@ -230,13 +257,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       });
 
       // Clear pending setup
+      console.log('🔨 Clearing pending setup state...');
       setNeedsProfileSetup(false);
       setPendingUserData(null);
 
       console.log('🎉 Profile setup completed successfully');
+      console.log('🔨 ===== ENDING createUserProfile =====');
       return { error: null };
     } catch (error) {
       console.error('❌ Profile creation error:', error);
+      console.log('🔨 ===== ENDING createUserProfile (ERROR) =====');
       return { error };
     }
   };
@@ -330,12 +360,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Enhanced debug logging for state changes
   useEffect(() => {
-    console.log('🔍 AUTH STATE UPDATE:', {
+    console.log('🔍 ===== AUTH STATE UPDATE =====');
+    console.log('🔍 User:', {
       hasUser: !!user,
       userName: user?.name,
+      userRole: user?.role
+    });
+    console.log('🔍 Session:', {
       hasSession: !!session,
-      sessionUserId: session?.user?.id,
-      loading,
+      sessionUserId: session?.user?.id
+    });
+    console.log('🔍 Loading:', loading);
+    console.log('🔍 Profile Setup:', {
       needsProfileSetup,
       hasPendingData: !!pendingUserData,
       pendingName: pendingUserData?.name,
@@ -343,14 +379,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     });
     
     // CRITICAL: Log when modal should show
-    if (needsProfileSetup && pendingUserData && !loading) {
-      console.log('🚨 MODAL SHOULD BE VISIBLE NOW!');
-      console.log('🚨 Modal conditions met:', {
-        needsProfileSetup: true,
-        pendingUserData: !!pendingUserData,
-        loading: false
-      });
+    const shouldShowModal = needsProfileSetup && pendingUserData && !loading;
+    console.log('🔍 Modal Should Show:', shouldShowModal);
+    
+    if (shouldShowModal) {
+      console.log('🚨 ===== MODAL SHOULD BE VISIBLE NOW! =====');
+      console.log('🚨 All conditions met for modal display');
     }
+    
+    console.log('🔍 ===== END AUTH STATE UPDATE =====');
   }, [user, session, loading, needsProfileSetup, pendingUserData]);
 
   const value = {
