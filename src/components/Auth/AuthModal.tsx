@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Eye, EyeOff, Mail, Lock, User as UserIcon } from 'lucide-react';
+import { X, Eye, EyeOff, Mail, Lock, User as UserIcon, Car, PlusCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface AuthModalProps {
@@ -22,6 +22,35 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    
+    // Validate required fields
+    if (!isLogin) {
+      if (!formData.name.trim()) {
+        setError('Meno je povinné');
+        return;
+      }
+      if (!formData.email.trim()) {
+        setError('E-mail je povinný');
+        return;
+      }
+      if (!formData.password.trim()) {
+        setError('Heslo je povinné');
+        return;
+      }
+      if (formData.password.length < 6) {
+        setError('Heslo musí mať aspoň 6 znakov');
+        return;
+      }
+    } else {
+      if (!formData.email.trim()) {
+        setError('E-mail je povinný');
+        return;
+      }
+      if (!formData.password.trim()) {
+        setError('Heslo je povinné');
+        return;
+      }
+    }
     
     try {
       let result;
@@ -51,10 +80,17 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
+    });
+  };
+
+  const handleRoleChange = (role: 'owner' | 'customer') => {
+    setFormData({
+      ...formData,
+      role
     });
   };
 
@@ -124,7 +160,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           {!isLogin && (
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                Celé meno
+                Celé meno *
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -137,7 +173,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                   required
                   value={formData.name}
                   onChange={handleInputChange}
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-sm"
                   placeholder="Zadajte svoje celé meno"
                 />
               </div>
@@ -146,7 +182,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-              E-mailová adresa
+              E-mailová adresa *
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -159,7 +195,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 required
                 value={formData.email}
                 onChange={handleInputChange}
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-sm"
                 placeholder="Zadajte svoj e-mail"
               />
             </div>
@@ -167,7 +203,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              Heslo
+              Heslo *
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -180,7 +216,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 required
                 value={formData.password}
                 onChange={handleInputChange}
-                className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-sm"
                 placeholder="Zadajte svoje heslo"
                 minLength={6}
               />
@@ -196,30 +232,120 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 )}
               </button>
             </div>
+            {!isLogin && (
+              <p className="text-xs text-gray-500 mt-1">
+                Heslo musí mať aspoň 6 znakov
+              </p>
+            )}
           </div>
 
           {!isLogin && (
             <div>
-              <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
-                Chcem
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Chcem *
               </label>
-              <select
-                id="role"
-                name="role"
-                value={formData.role}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-              >
-                <option value="customer">Prenajímať campervany</option>
-                <option value="owner">Pridať svoj campervan</option>
-              </select>
+              <div className="grid grid-cols-2 gap-3">
+                {/* Rent Campers Option */}
+                <label className="relative cursor-pointer">
+                  <input
+                    type="radio"
+                    name="role"
+                    value="customer"
+                    checked={formData.role === 'customer'}
+                    onChange={() => handleRoleChange('customer')}
+                    className="sr-only"
+                    required
+                  />
+                  <div className={`
+                    flex flex-col items-center p-4 rounded-xl border-2 transition-all duration-200
+                    ${formData.role === 'customer' 
+                      ? 'border-emerald-500 bg-emerald-50 shadow-md' 
+                      : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                    }
+                  `}>
+                    <div className={`
+                      w-12 h-12 rounded-full flex items-center justify-center mb-2 transition-colors
+                      ${formData.role === 'customer' 
+                        ? 'bg-emerald-500 text-white' 
+                        : 'bg-gray-100 text-gray-600'
+                      }
+                    `}>
+                      <Car className="h-6 w-6" />
+                    </div>
+                    <span className={`
+                      text-sm font-medium text-center leading-tight
+                      ${formData.role === 'customer' ? 'text-emerald-700' : 'text-gray-700'}
+                    `}>
+                      Prenajať<br />Karavan
+                    </span>
+                    {formData.role === 'customer' && (
+                      <div className="absolute top-2 right-2 w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center">
+                        <div className="w-2 h-2 bg-white rounded-full"></div>
+                      </div>
+                    )}
+                  </div>
+                </label>
+
+                {/* Add Camper Option */}
+                <label className="relative cursor-pointer">
+                  <input
+                    type="radio"
+                    name="role"
+                    value="owner"
+                    checked={formData.role === 'owner'}
+                    onChange={() => handleRoleChange('owner')}
+                    className="sr-only"
+                    required
+                  />
+                  <div className={`
+                    flex flex-col items-center p-4 rounded-xl border-2 transition-all duration-200
+                    ${formData.role === 'owner' 
+                      ? 'border-orange-500 bg-orange-50 shadow-md' 
+                      : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                    }
+                  `}>
+                    <div className={`
+                      w-12 h-12 rounded-full flex items-center justify-center mb-2 transition-colors
+                      ${formData.role === 'owner' 
+                        ? 'bg-orange-500 text-white' 
+                        : 'bg-gray-100 text-gray-600'
+                      }
+                    `}>
+                      <PlusCircle className="h-6 w-6" />
+                    </div>
+                    <span className={`
+                      text-sm font-medium text-center leading-tight
+                      ${formData.role === 'owner' ? 'text-orange-700' : 'text-gray-700'}
+                    `}>
+                      Pridať<br />Karavan
+                    </span>
+                    {formData.role === 'owner' && (
+                      <div className="absolute top-2 right-2 w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center">
+                        <div className="w-2 h-2 bg-white rounded-full"></div>
+                      </div>
+                    )}
+                  </div>
+                </label>
+              </div>
+              <p className="text-xs text-gray-500 mt-2 text-center">
+                {formData.role === 'customer' 
+                  ? 'Hľadáte karavan na prenájom pre vašu dovolenku' 
+                  : 'Chcete zarábať prenajímaním svojho karavanu'
+                }
+              </p>
             </div>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-emerald-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`
+              w-full py-3 px-4 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg
+              ${!isLogin && formData.role === 'owner'
+                ? 'bg-orange-600 text-white hover:bg-orange-700 focus:ring-orange-500' 
+                : 'bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-500'
+              }
+            `}
           >
             {loading ? 'Čakajte prosím...' : (isLogin ? 'Prihlásiť sa' : 'Vytvoriť účet')}
           </button>
