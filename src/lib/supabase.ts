@@ -25,19 +25,38 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     headers: {
       'x-client-info': 'mycamper-web'
     }
+  },
+  // PERFORMANCE OPTIMIZATION: Add connection settings for faster queries
+  realtime: {
+    params: {
+      eventsPerSecond: 10
+    }
   }
 });
 
-// Enhanced connection test with better error handling
+// ULTRA-FAST connection test with aggressive timeout
 const testConnection = async () => {
   try {
-    console.log('🔍 Testing Supabase connection...');
+    console.log('🔍 Testing Supabase connection with 2 second timeout...');
     const startTime = Date.now();
     
-    // Test with a simple query that should always work
-    const { data, error, count } = await supabase
+    // ULTRA-FAST test query with aggressive timeout
+    const testPromise = supabase
       .from('users')
-      .select('*', { count: 'exact', head: true });
+      .select('id', { count: 'exact', head: true })
+      .limit(1);
+    
+    // AGGRESSIVE 2 second timeout
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error('Connection test timeout (2s) - Supabase too slow'));
+      }, 2000);
+    });
+    
+    const { data, error, count } = await Promise.race([
+      testPromise,
+      timeoutPromise
+    ]) as any;
     
     const testTime = Date.now() - startTime;
     
@@ -52,18 +71,33 @@ const testConnection = async () => {
       // Check if it's a table not found error
       if (error.code === '42P01' || error.message?.includes('relation') || error.message?.includes('does not exist')) {
         console.log('⚠️ Users table does not exist - this is expected for new projects');
-        console.log('💡 Please run: Connect to Supabase button to set up the database');
+        console.log('💡 Please click "Connect to Supabase" button to set up the database');
+      } else {
+        console.log('🚨 SLOW DATABASE WARNING: Supabase queries are taking too long');
+        console.log('💡 This may cause authentication issues and modal flashing');
       }
     } else {
-      console.log(`✅ Supabase connection test successful in ${testTime}ms`);
+      if (testTime > 1000) {
+        console.warn(`⚠️ Supabase connection SLOW: ${testTime}ms (should be <1000ms)`);
+        console.log('🚨 WARNING: Slow database will cause authentication delays');
+      } else {
+        console.log(`✅ Supabase connection test successful in ${testTime}ms`);
+      }
       console.log(`📊 Users table exists with ${count || 0} records`);
     }
   } catch (err) {
+    const testTime = Date.now() - Date.now();
     console.error('❌ Supabase connection test error:', {
       name: err.name,
       message: err.message,
-      stack: err.stack
+      testTime: `${testTime}ms`
     });
+    
+    if (err.message?.includes('timeout')) {
+      console.log('🚨 CRITICAL: Supabase connection is too slow (>2s)');
+      console.log('💡 This will cause authentication issues and modal problems');
+      console.log('🔧 Consider using a different Supabase region or checking network');
+    }
   }
 };
 

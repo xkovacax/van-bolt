@@ -103,29 +103,48 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       const queryStartTime = Date.now();
       
-      // ENHANCED: Add explicit timeout and better error handling
-      console.log('📊 Creating query with 10 second timeout...');
+      // ULTRA-FAST QUERY: Reduced timeout to 3 seconds and optimized query
+      console.log('📊 Creating ULTRA-FAST query with 3 second timeout...');
       
       const queryPromise = supabase
         .from('users')
         .select('id, name, email, role, avatar, rating, review_count')
         .eq('id', supabaseUser.id)
+        .limit(1) // Add limit for faster query
         .maybeSingle();
 
-      // Add explicit timeout to prevent hanging
+      // AGGRESSIVE timeout - 3 seconds max
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {
-          console.log('⏰ Database query timeout after 10 seconds');
-          reject(new Error('Database query timeout (10s)'));
-        }, 10000);
+          console.log('⏰ AGGRESSIVE TIMEOUT: Database query timeout after 3 seconds');
+          reject(new Error('Database query timeout (3s) - connection too slow'));
+        }, 3000);
       });
 
-      console.log('📊 Executing query with timeout protection...');
+      console.log('📊 Executing ULTRA-FAST query with 3s timeout...');
       
-      const result = await Promise.race([
-        queryPromise,
-        timeoutPromise
-      ]) as any;
+      let result;
+      try {
+        result = await Promise.race([
+          queryPromise,
+          timeoutPromise
+        ]) as any;
+      } catch (timeoutError) {
+        console.error('⏰ TIMEOUT ERROR:', timeoutError.message);
+        
+        // On timeout, immediately create fallback user to prevent hanging
+        console.log('🚨 TIMEOUT FALLBACK: Creating immediate fallback user');
+        createFallbackUser(supabaseUser);
+        
+        console.log('🎯 MODAL CHECK: Timeout fallback created', {
+          needsSetup: false,
+          hasPendingData: false,
+          modalShouldShow: false,
+          reason: 'timeout_fallback',
+          timestamp: new Date().toISOString()
+        });
+        return;
+      }
 
       const { data: userProfile, error: dbError } = result;
       const queryTime = Date.now() - queryStartTime;
@@ -165,6 +184,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             needsSetup: true,
             hasPendingData: !!pendingData,
             modalShouldShow: true,
+            reason: 'profile_not_found',
             timestamp: new Date().toISOString()
           });
         } else {
@@ -177,6 +197,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             needsSetup: false,
             hasPendingData: false,
             modalShouldShow: false,
+            reason: 'database_error_fallback',
             timestamp: new Date().toISOString()
           });
         }
@@ -211,6 +232,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           modalShouldShow: false,
           hasUser: true,
           userName: userProfile.name,
+          reason: 'profile_found',
           timestamp: new Date().toISOString()
         });
       } else {
@@ -223,6 +245,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           needsSetup: true,
           hasPendingData: !!pendingData,
           modalShouldShow: true,
+          reason: 'no_profile_found',
           timestamp: new Date().toISOString()
         });
       }
@@ -243,6 +266,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         needsSetup: false,
         hasPendingData: false,
         modalShouldShow: false,
+        reason: 'critical_error_fallback',
         timestamp: new Date().toISOString()
       });
     }
@@ -311,10 +335,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name)}&size=150&background=059669&color=fff&bold=true`;
       }
 
-      console.log('🔨 Inserting into database...');
+      console.log('🔨 Inserting into database with 5 second timeout...');
       const insertStartTime = Date.now();
       
-      const { data: newUser, error: dbError } = await supabase
+      // FAST INSERT with timeout
+      const insertPromise = supabase
         .from('users')
         .insert([
           {
@@ -329,6 +354,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         ])
         .select('id, name, email, role, avatar, rating, review_count')
         .single();
+
+      // 5 second timeout for insert
+      const insertTimeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          console.log('⏰ INSERT TIMEOUT: Profile creation timeout after 5 seconds');
+          reject(new Error('Profile creation timeout (5s)'));
+        }, 5000);
+      });
+
+      const { data: newUser, error: dbError } = await Promise.race([
+        insertPromise,
+        insertTimeoutPromise
+      ]) as any;
 
       const insertTime = Date.now() - insertStartTime;
       console.log(`🔨 Insert completed in ${insertTime}ms`);
@@ -378,6 +416,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         modalShouldShow: false,
         hasUser: true,
         userName: newUser.name,
+        reason: 'profile_created',
         timestamp: new Date().toISOString()
       });
 
@@ -447,24 +486,37 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return { error };
     }
 
-    // If user is created, create user profile
+    // If user is created, create user profile with timeout
     if (data.user) {
-      const { error: userError } = await supabase
-        .from('users')
-        .insert([
-          {
-            id: data.user.id,
-            name: name || 'User',
-            email: email || '',
-            role,
-            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&size=150&background=059669&color=fff&bold=true`,
-            rating: 5.0,
-            review_count: 0
-          }
-        ]);
+      try {
+        const profilePromise = supabase
+          .from('users')
+          .insert([
+            {
+              id: data.user.id,
+              name: name || 'User',
+              email: email || '',
+              role,
+              avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&size=150&background=059669&color=fff&bold=true`,
+              rating: 5.0,
+              review_count: 0
+            }
+          ]);
 
-      if (userError) {
-        console.error('Error creating user profile:', userError);
+        const profileTimeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Profile creation timeout')), 5000);
+        });
+
+        const { error: userError } = await Promise.race([
+          profilePromise,
+          profileTimeoutPromise
+        ]) as any;
+
+        if (userError) {
+          console.error('Error creating user profile:', userError);
+        }
+      } catch (error) {
+        console.error('Profile creation timeout or error:', error);
       }
     }
 
