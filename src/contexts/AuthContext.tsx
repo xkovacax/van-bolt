@@ -205,11 +205,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         .limit(1)
         .maybeSingle();
 
-      // 3 second timeout
+      // 2 second timeout for faster response
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {
-          reject(new Error('Database query timeout (3s)'));
-        }, 3000);
+          reject(new Error('Database query timeout (2s)'));
+        }, 2000);
       });
 
       const { data: userProfile, error: dbError } = await Promise.race([
@@ -250,32 +250,37 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('👤 User ID:', supabaseUser.id);
     console.log('👤 User email:', supabaseUser.email);
     
-    // CRITICAL: Check if profile was just created using localStorage
+    // 🚨 CRITICAL FIX: SYNCHRONOUS localStorage check FIRST to prevent modal flash
+    console.log('🔒 STEP 0: SYNCHRONOUS localStorage check...');
     const profileJustCreated = wasProfileJustCreated();
+    
     if (profileJustCreated) {
-      console.log('🚫 SKIPPING modal logic - profile was just created (localStorage check)');
+      console.log('🚫 IMMEDIATE SKIP: Profile was just created (localStorage check)');
+      
+      // IMMEDIATE state update to prevent modal flash
+      console.log('⚡ Setting immediate loading state to prevent modal flash');
+      setNeedsProfileSetup(false);
+      setPendingUserData(null);
       
       // Fetch the fresh profile from database
       const userProfile = await fetchUserProfile(supabaseUser.id);
       if (userProfile) {
         console.log('✅ Setting user from fresh profile after creation');
         setUser(userProfile);
-        setNeedsProfileSetup(false);
-        setPendingUserData(null);
         setLoading(false);
         
-        console.log('🎯 MODAL CHECK: Profile just created, user loaded', {
+        console.log('🎯 MODAL CHECK: Profile just created, user loaded immediately', {
           needsSetup: false,
           hasPendingData: false,
           modalShouldShow: false,
           hasUser: true,
           userName: userProfile.name,
           userRole: userProfile.role,
-          reason: 'just_created_profile_localStorage',
+          reason: 'just_created_profile_localStorage_immediate',
           timestamp: new Date().toISOString()
         });
         
-        console.log('👤 ===== ENDING handleUserSession (JUST CREATED) =====');
+        console.log('👤 ===== ENDING handleUserSession (IMMEDIATE SKIP) =====');
         return;
       } else {
         console.error('❌ Failed to fetch profile after creation - falling back to normal flow');
@@ -304,22 +309,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           localStorage.removeItem('preferredRole');
         }
         
-        // Set user and ensure modal state is cleared
+        // Set user and ensure modal state is cleared IMMEDIATELY
         setUser(userProfile);
-        
-        // Clear any pending modal state
         setNeedsProfileSetup(false);
         setPendingUserData(null);
         setLoading(false);
         
-        console.log('🎯 MODAL CHECK: User profile loaded', {
+        console.log('🎯 MODAL CHECK: User profile loaded immediately', {
           needsSetup: false,
           hasPendingData: false,
           modalShouldShow: false,
           hasUser: true,
           userName: userProfile.name,
           userRole: userProfile.role,
-          reason: 'profile_found',
+          reason: 'profile_found_immediate',
           timestamp: new Date().toISOString()
         });
       } else {
@@ -339,14 +342,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.error('❌ CRITICAL ERROR in handleUserSession:', error);
       
       // On critical error, create fallback user to prevent modal flash
-      console.log('🎯 CRITICAL ERROR FALLBACK: Creating fallback user');
+      console.log('🎯 CRITICAL ERROR FALLBACK: Creating fallback user immediately');
       createFallbackUser(supabaseUser);
       
-      console.log('🎯 MODAL CHECK: Critical error, fallback created', {
+      console.log('🎯 MODAL CHECK: Critical error, fallback created immediately', {
         needsSetup: false,
         hasPendingData: false,
         modalShouldShow: false,
-        reason: 'critical_error_fallback',
+        reason: 'critical_error_fallback_immediate',
         timestamp: new Date().toISOString()
       });
     }
@@ -417,7 +420,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name)}&size=150&background=059669&color=fff&bold=true`;
       }
 
-      console.log('🔨 Inserting into database with 5 second timeout...');
+      console.log('🔨 Inserting into database with 3 second timeout...');
       const insertStartTime = Date.now();
       
       // FAST INSERT with timeout
@@ -437,12 +440,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         .select('id, name, email, role, avatar, rating, review_count')
         .single();
 
-      // 5 second timeout for insert
+      // 3 second timeout for insert
       const insertTimeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {
-          console.log('⏰ INSERT TIMEOUT: Profile creation timeout after 5 seconds');
-          reject(new Error('Profile creation timeout (5s)'));
-        }, 5000);
+          console.log('⏰ INSERT TIMEOUT: Profile creation timeout after 3 seconds');
+          reject(new Error('Profile creation timeout (3s)'));
+        }, 3000);
       });
 
       const { data: newUser, error: dbError } = await Promise.race([
@@ -604,7 +607,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           ]);
 
         const profileTimeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Profile creation timeout')), 5000);
+          setTimeout(() => reject(new Error('Profile creation timeout')), 3000);
         });
 
         const { error: userError } = await Promise.race([
