@@ -103,6 +103,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       const queryStartTime = Date.now();
       
+      // Check for preferred role from localStorage (Google OAuth flow)
+      const preferredRole = localStorage.getItem('preferredRole');
+      if (preferredRole) {
+        console.log('🎯 Found preferred role from localStorage:', preferredRole);
+        localStorage.removeItem('preferredRole'); // Clean up
+      }
+      
       // ULTRA-FAST QUERY: Reduced timeout to 3 seconds and optimized query
       console.log('📊 Creating ULTRA-FAST query with 3 second timeout...');
       
@@ -177,7 +184,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             dbError.message?.includes('does not exist')) {
           
           console.log('🎯 User profile not found or table missing - needs setup');
-          const pendingData = setupPendingProfile(supabaseUser);
+          const pendingData = setupPendingProfile(supabaseUser, preferredRole);
           
           // SYNCHRONOUS CHECK AFTER SETTING PENDING DATA
           console.log('🎯 MODAL CHECK: Profile setup needed', {
@@ -238,7 +245,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } else {
         // No profile found - need profile setup
         console.log(`🎯 No profile found in ${queryTime}ms - triggering setup modal`);
-        const pendingData = setupPendingProfile(supabaseUser);
+        const pendingData = setupPendingProfile(supabaseUser, preferredRole);
         
         // SYNCHRONOUS CHECK AFTER SETTING UP PROFILE
         console.log('🎯 MODAL CHECK: No profile found, setup needed', {
@@ -293,7 +300,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   // Helper function to setup pending profile - RETURNS PENDING DATA FOR SYNC CHECK
-  const setupPendingProfile = (supabaseUser: SupabaseUser) => {
+  const setupPendingProfile = (supabaseUser: SupabaseUser, preferredRole?: string | null) => {
     const userData = {
       id: supabaseUser.id,
       email: supabaseUser.email || '',
@@ -301,7 +308,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             supabaseUser.user_metadata?.name || 
             supabaseUser.email?.split('@')[0] || 'User',
       avatar: supabaseUser.user_metadata?.avatar_url || 
-              supabaseUser.user_metadata?.picture
+              supabaseUser.user_metadata?.picture,
+      preferredRole: preferredRole as 'owner' | 'customer' || undefined
     };
     
     console.log('📝 Setting up pending profile:', userData);

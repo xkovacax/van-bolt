@@ -6,10 +6,16 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultRole?: 'owner' | 'customer';
+  defaultMode?: 'login' | 'register'; // New prop to control initial mode
 }
 
-const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, defaultRole = 'customer' }) => {
-  const [isLogin, setIsLogin] = useState(true);
+const AuthModal: React.FC<AuthModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  defaultRole = 'customer',
+  defaultMode = 'login' // Default to login for normal auth flow
+}) => {
+  const [isLogin, setIsLogin] = useState(defaultMode === 'login');
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -27,6 +33,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, defaultRole = 'c
       role: defaultRole
     }));
   }, [defaultRole]);
+
+  // Update mode when defaultMode prop changes
+  useEffect(() => {
+    setIsLogin(defaultMode === 'login');
+  }, [defaultMode]);
 
   // Disable/enable body scroll when modal opens/closes
   useEffect(() => {
@@ -99,6 +110,12 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, defaultRole = 'c
 
   const handleGoogleLogin = async () => {
     setError(null);
+    
+    // Store preferred role in localStorage for Google OAuth flow
+    if (!isLogin && defaultRole === 'owner') {
+      localStorage.setItem('preferredRole', 'owner');
+    }
+    
     const { error } = await loginWithGoogle();
     if (error) {
       setError(error.message);

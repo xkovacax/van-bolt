@@ -29,6 +29,7 @@ const AppContent: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<string[]>([]);
   const [authModalDefaultRole, setAuthModalDefaultRole] = useState<'owner' | 'customer'>('customer');
+  const [authModalDefaultMode, setAuthModalDefaultMode] = useState<'login' | 'register'>('login');
   const [filters, setFilters] = useState<FilterOptions>({
     priceRange: [0, 500],
     capacity: 0,
@@ -121,27 +122,29 @@ const AppContent: React.FC = () => {
     alert(`Žiadosť o rezerváciu bola odoslaná pre ${camper.title}! Čoskoro dostanete potvrdzujúci e-mail.`);
   };
 
-  const handleProfileSetupClose = () => {
-    // Don't allow closing without completing setup
-    console.log('⚠️ Profile setup cannot be closed without completion');
-  };
-
-  // Handle auth modal opening with default role
-  const handleAuthClick = (defaultRole: 'owner' | 'customer' = 'customer') => {
+  // Handle auth modal opening with default role and mode
+  const handleAuthClick = (defaultRole: 'owner' | 'customer' = 'customer', defaultMode: 'login' | 'register' = 'login') => {
     setAuthModalDefaultRole(defaultRole);
+    setAuthModalDefaultMode(defaultMode);
     setIsAuthModalOpen(true);
   };
 
-  // Handle "Add Campervan" button click
+  // Handle "Add Campervan" button click - ALWAYS opens REGISTRATION form
   const handleAddCampervanClick = () => {
     if (!isAuthenticated) {
-      // Open auth modal with owner role pre-selected
-      handleAuthClick('owner');
+      // Open REGISTRATION modal with owner role pre-selected
+      console.log('🚗 Opening REGISTRATION modal for Add Campervan');
+      handleAuthClick('owner', 'register'); // Force registration mode
     } else {
       // User is authenticated, handle add campervan logic
       console.log('🚗 Add campervan functionality for authenticated user');
       // TODO: Navigate to add campervan page or open modal
     }
+  };
+
+  const handleProfileSetupClose = () => {
+    // Don't allow closing without completing setup
+    console.log('⚠️ Profile setup cannot be closed without completion');
   };
 
   // Show modal conditions
@@ -158,7 +161,7 @@ const AppContent: React.FC = () => {
     <div className="min-h-screen bg-gray-50">
       <Header 
         onSearch={handleSearch} 
-        onAuthClick={() => handleAuthClick('customer')}
+        onAuthClick={() => handleAuthClick('customer', 'login')} // Normal auth opens login
         onAddCampervanClick={handleAddCampervanClick}
       />
       
@@ -226,6 +229,7 @@ const AppContent: React.FC = () => {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         defaultRole={authModalDefaultRole}
+        defaultMode={authModalDefaultMode} // Pass the mode to control login/register
       />
 
       {/* User Profile Setup Modal - ENHANCED VISIBILITY */}
@@ -260,6 +264,7 @@ const AppContent: React.FC = () => {
             <div>Pending Name: {pendingUserData?.name || 'N/A'}</div>
             <div>Pending Email: {pendingUserData?.email || 'N/A'}</div>
             <div>Default Role: {authModalDefaultRole}</div>
+            <div>Default Mode: {authModalDefaultMode}</div>
             <div className="border-t border-gray-600 pt-2 mt-2">
               <div className={`font-bold ${shouldShowProfileModal ? 'text-green-400' : 'text-red-400'}`}>
                 Modal Should Show: {shouldShowProfileModal ? '✅ YES' : '❌ NO'}
