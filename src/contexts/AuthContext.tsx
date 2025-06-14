@@ -97,30 +97,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('👤 ===== STARTING handleUserSession =====');
     console.log('👤 User ID:', supabaseUser.id);
     console.log('👤 User email:', supabaseUser.email);
-    console.log('👤 User metadata:', supabaseUser.user_metadata);
     
     try {
-      // STEP 1: Check if user profile exists in database
-      console.log('📊 STEP 1: Checking user profile in database...');
-      console.log('📊 Supabase client status:', !!supabase);
-      console.log('📊 Query details:', {
-        table: 'users',
-        filter: `id = ${supabaseUser.id}`,
-        method: 'single()'
-      });
+      // OPTIMIZED: Use faster query with specific columns and shorter timeout
+      console.log('📊 STEP 1: Quick user profile check...');
       
-      // Add timeout to prevent hanging
+      const queryStartTime = Date.now();
+      
+      // Optimized query - only select needed columns
       const queryPromise = supabase
         .from('users')
-        .select('*')
+        .select('id, name, email, role, avatar, rating, review_count')
         .eq('id', supabaseUser.id)
-        .single();
+        .maybeSingle(); // Use maybeSingle instead of single to avoid error on no results
 
-      console.log('📊 Query created, executing...');
-      
-      // Set a timeout for the query
+      // Reduced timeout to 5 seconds
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Database query timeout')), 10000); // 10 second timeout
+        setTimeout(() => reject(new Error('Database query timeout (5s)')), 5000);
       });
 
       const { data: userProfile, error: dbError } = await Promise.race([
@@ -128,81 +121,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         timeoutPromise
       ]) as any;
 
-      console.log('📊 ===== DATABASE QUERY COMPLETED =====');
-      console.log('📊 Query result:', { 
-        hasProfile: !!userProfile, 
-        error: dbError?.code,
-        errorMessage: dbError?.message,
-        errorDetails: dbError?.details,
-        errorHint: dbError?.hint,
-        profileData: userProfile
-      });
+      const queryTime = Date.now() - queryStartTime;
+      console.log(`📊 Query completed in ${queryTime}ms`);
 
       // STEP 2: Handle database response
       if (dbError) {
-        console.log('❌ Database error detected:', {
+        console.log('❌ Database error:', {
           code: dbError.code,
           message: dbError.message,
-          details: dbError.details,
-          hint: dbError.hint
+          queryTime: `${queryTime}ms`
         });
         
-        if (dbError.code === 'PGRST116') {
-          // User profile doesn't exist - need profile setup
-          console.log('🎯 STEP 2A: User profile not found - triggering setup modal');
-          
-          const userData = {
-            id: supabaseUser.id,
-            email: supabaseUser.email || '',
-            name: supabaseUser.user_metadata?.full_name || 
-                  supabaseUser.user_metadata?.name || 
-                  supabaseUser.email?.split('@')[0] || 'User',
-            avatar: supabaseUser.user_metadata?.avatar_url || 
-                    supabaseUser.user_metadata?.picture
-          };
-          
-          console.log('📝 Prepared user data for setup:', userData);
-          console.log('🎯 Setting needsProfileSetup = true');
-          console.log('🎯 Setting pendingUserData');
-          console.log('🎯 Setting loading = false');
-          
-          setPendingUserData(userData);
-          setNeedsProfileSetup(true);
-          setUser(null);
-          setLoading(false);
-          
-          console.log('✅ Profile setup state configured');
-          return;
-        } else {
-          // Other database error
-          console.error('❌ STEP 2B: Other database error:', dbError);
-          console.error('❌ This might be a permissions or RLS issue');
-          
-          // For now, assume user needs profile setup if we can't query
-          console.log('🎯 FALLBACK: Assuming user needs profile setup due to query error');
-          
-          const userData = {
-            id: supabaseUser.id,
-            email: supabaseUser.email || '',
-            name: supabaseUser.user_metadata?.full_name || 
-                  supabaseUser.user_metadata?.name || 
-                  supabaseUser.email?.split('@')[0] || 'User',
-            avatar: supabaseUser.user_metadata?.avatar_url || 
-                    supabaseUser.user_metadata?.picture
-          };
-          
-          setPendingUserData(userData);
-          setNeedsProfileSetup(true);
-          setUser(null);
-          setLoading(false);
-          return;
-        }
+        // Assume user needs profile setup on any error
+        console.log('🎯 FALLBACK: Assuming user needs profile setup due to query error');
+        setupPendingProfile(supabaseUser);
+        return;
       }
 
-      // STEP 3: User profile exists
+      // STEP 3: Check if user profile exists
       if (userProfile) {
-        console.log('✅ STEP 3: User profile found');
-        console.log('✅ Profile data:', userProfile);
+        console.log(`✅ User profile found in ${queryTime}ms`);
         
         setUser({
           id: userProfile.id,
@@ -219,52 +157,38 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         console.log('✅ User state updated successfully');
       } else {
-        // No profile found but no error - this shouldn't happen with single()
-        console.log('⚠️ STEP 3B: No profile found and no error - assuming needs setup');
-        
-        const userData = {
-          id: supabaseUser.id,
-          email: supabaseUser.email || '',
-          name: supabaseUser.user_metadata?.full_name || 
-                supabaseUser.user_metadata?.name || 
-                supabaseUser.email?.split('@')[0] || 'User',
-          avatar: supabaseUser.user_metadata?.avatar_url || 
-                  supabaseUser.user_metadata?.picture
-        };
-        
-        setPendingUserData(userData);
-        setNeedsProfileSetup(true);
-        setUser(null);
-        setLoading(false);
+        // No profile found - need profile setup
+        console.log(`🎯 No profile found in ${queryTime}ms - triggering setup modal`);
+        setupPendingProfile(supabaseUser);
       }
     } catch (error) {
       console.error('❌ CRITICAL ERROR in handleUserSession:', error);
-      console.error('❌ Error details:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      });
       
       // If there's a critical error, assume user needs profile setup
       console.log('🎯 CRITICAL ERROR FALLBACK: Assuming user needs profile setup');
-      
-      const userData = {
-        id: supabaseUser.id,
-        email: supabaseUser.email || '',
-        name: supabaseUser.user_metadata?.full_name || 
-              supabaseUser.user_metadata?.name || 
-              supabaseUser.email?.split('@')[0] || 'User',
-        avatar: supabaseUser.user_metadata?.avatar_url || 
-                supabaseUser.user_metadata?.picture
-      };
-      
-      setPendingUserData(userData);
-      setNeedsProfileSetup(true);
-      setUser(null);
-      setLoading(false);
+      setupPendingProfile(supabaseUser);
     }
     
     console.log('👤 ===== ENDING handleUserSession =====');
+  };
+
+  // Helper function to setup pending profile
+  const setupPendingProfile = (supabaseUser: SupabaseUser) => {
+    const userData = {
+      id: supabaseUser.id,
+      email: supabaseUser.email || '',
+      name: supabaseUser.user_metadata?.full_name || 
+            supabaseUser.user_metadata?.name || 
+            supabaseUser.email?.split('@')[0] || 'User',
+      avatar: supabaseUser.user_metadata?.avatar_url || 
+              supabaseUser.user_metadata?.picture
+    };
+    
+    console.log('📝 Setting up pending profile:', userData);
+    setPendingUserData(userData);
+    setNeedsProfileSetup(true);
+    setUser(null);
+    setLoading(false);
   };
 
   const createUserProfile = async (userData: { name: string; role: 'owner' | 'customer' }) => {
@@ -277,7 +201,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     try {
       console.log('🔨 Creating user profile with data:', userData);
-      console.log('🔨 Pending user data:', pendingUserData);
       
       // Generate default avatar if none provided
       let avatarUrl = pendingUserData.avatar;
@@ -285,8 +208,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name)}&size=150&background=059669&color=fff&bold=true`;
       }
 
-      // Create user profile in database
+      // OPTIMIZED: Create user profile with faster insert
       console.log('🔨 Inserting into database...');
+      const insertStartTime = Date.now();
+      
       const { data: newUser, error: dbError } = await supabase
         .from('users')
         .insert([
@@ -300,8 +225,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             review_count: 0
           }
         ])
-        .select()
+        .select('id, name, email, role, avatar, rating, review_count')
         .single();
+
+      const insertTime = Date.now() - insertStartTime;
+      console.log(`🔨 Insert completed in ${insertTime}ms`);
 
       if (dbError) {
         console.error('❌ Database insert error:', dbError);
@@ -310,20 +238,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       console.log('✅ User profile created successfully:', newUser);
 
-      // Update auth metadata
-      console.log('🔨 Updating auth metadata...');
-      const { error: updateError } = await supabase.auth.updateUser({
+      // OPTIMIZED: Update auth metadata in background (don't wait for it)
+      supabase.auth.updateUser({
         data: {
           full_name: userData.name.trim(),
           role: userData.role
         }
+      }).then(({ error }) => {
+        if (error) {
+          console.error('⚠️ Auth metadata update error:', error);
+        } else {
+          console.log('✅ Auth metadata updated');
+        }
       });
 
-      if (updateError) {
-        console.error('⚠️ Auth metadata update error:', updateError);
-      }
-
-      // Set the user in state
+      // Set the user in state immediately
       console.log('🔨 Setting user state...');
       setUser({
         id: newUser.id,
@@ -437,36 +366,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setPendingUserData(null);
   };
 
-  // Enhanced debug logging for state changes
+  // Simplified debug logging
   useEffect(() => {
-    console.log('🔍 ===== AUTH STATE UPDATE =====');
-    console.log('🔍 User:', {
-      hasUser: !!user,
-      userName: user?.name,
-      userRole: user?.role
-    });
-    console.log('🔍 Session:', {
-      hasSession: !!session,
-      sessionUserId: session?.user?.id
-    });
-    console.log('🔍 Loading:', loading);
-    console.log('🔍 Profile Setup:', {
-      needsProfileSetup,
-      hasPendingData: !!pendingUserData,
-      pendingName: pendingUserData?.name,
-      pendingEmail: pendingUserData?.email
-    });
-    
-    // CRITICAL: Log when modal should show
     const shouldShowModal = needsProfileSetup && pendingUserData && !loading;
-    console.log('🔍 Modal Should Show:', shouldShowModal);
-    
-    if (shouldShowModal) {
-      console.log('🚨 ===== MODAL SHOULD BE VISIBLE NOW! =====');
-      console.log('🚨 All conditions met for modal display');
-    }
-    
-    console.log('🔍 ===== END AUTH STATE UPDATE =====');
+    console.log('🔍 AUTH STATE:', {
+      hasUser: !!user,
+      hasSession: !!session,
+      loading,
+      needsProfileSetup,
+      modalShouldShow: shouldShowModal
+    });
   }, [user, session, loading, needsProfileSetup, pendingUserData]);
 
   const value = {

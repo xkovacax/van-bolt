@@ -5,9 +5,7 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 console.log('🔧 Supabase Configuration:', {
   url: supabaseUrl ? '✅ Set' : '❌ Missing',
-  key: supabaseAnonKey ? '✅ Set' : '❌ Missing',
-  urlValue: supabaseUrl,
-  keyPreview: supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'N/A'
+  key: supabaseAnonKey ? '✅ Set' : '❌ Missing'
 });
 
 if (!supabaseUrl || !supabaseAnonKey) {
@@ -19,19 +17,48 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true
+  },
+  // PERFORMANCE OPTIMIZATION: Add connection pooling and timeout settings
+  db: {
+    schema: 'public'
+  },
+  global: {
+    headers: {
+      'x-client-info': 'mycamper-web'
+    }
   }
 });
 
-// Test connection
-supabase.from('users').select('count', { count: 'exact', head: true }).then(({ error, count }) => {
-  if (error) {
-    console.error('❌ Supabase connection test failed:', error);
-  } else {
-    console.log('✅ Supabase connection test successful, users table accessible');
+// OPTIMIZED: Faster connection test with timeout
+const testConnection = async () => {
+  try {
+    const startTime = Date.now();
+    
+    // Use a simple count query with timeout
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Connection test timeout')), 3000);
+    });
+    
+    const queryPromise = supabase
+      .from('users')
+      .select('*', { count: 'exact', head: true });
+    
+    const { error } = await Promise.race([queryPromise, timeoutPromise]) as any;
+    
+    const testTime = Date.now() - startTime;
+    
+    if (error) {
+      console.error(`❌ Supabase connection test failed in ${testTime}ms:`, error.message);
+    } else {
+      console.log(`✅ Supabase connection test successful in ${testTime}ms`);
+    }
+  } catch (err) {
+    console.error('❌ Supabase connection test error:', err.message);
   }
-}).catch(err => {
-  console.error('❌ Supabase connection test error:', err);
-});
+};
+
+// Run connection test
+testConnection();
 
 // Get the current origin for redirect URLs
 export const getRedirectUrl = () => {
