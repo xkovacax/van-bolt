@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Search, Menu, X, User, LogOut, PlusCircle, Heart, Calendar, Car, Settings } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -11,6 +11,24 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const { user, logout, isAuthenticated, loading } = useAuth();
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    if (isMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMenuOpen]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,7 +131,7 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
             )}
 
             {isAuthenticated && user ? (
-              <div className="relative">
+              <div className="relative" ref={dropdownRef}>
                 <button 
                   onClick={() => setIsMenuOpen(!isMenuOpen)}
                   className="flex items-center space-x-2 p-2 rounded-full hover:bg-gray-100 transition-colors"

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Eye, EyeOff, Mail, Lock, User as UserIcon, Car, PlusCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -18,6 +18,22 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   });
   const [error, setError] = useState<string | null>(null);
   const { login, register, loginWithGoogle, loading } = useAuth();
+
+  // Disable/enable body scroll when modal opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      // Disable scrolling
+      document.body.style.overflow = 'hidden';
+    } else {
+      // Re-enable scrolling
+      document.body.style.overflow = 'unset';
+    }
+
+    // Cleanup function to ensure scrolling is re-enabled when component unmounts
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

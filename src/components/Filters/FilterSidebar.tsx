@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { X, Sliders } from 'lucide-react';
 
 interface FilterOptions {
@@ -21,6 +21,25 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
   filters, 
   onFiltersChange 
 }) => {
+  // Disable/enable body scroll when mobile sidebar opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      // Only disable scrolling on mobile (when sidebar is overlay)
+      const isMobile = window.innerWidth < 1024; // lg breakpoint
+      if (isMobile) {
+        document.body.style.overflow = 'hidden';
+      }
+    } else {
+      // Re-enable scrolling
+      document.body.style.overflow = 'unset';
+    }
+
+    // Cleanup function to ensure scrolling is re-enabled when component unmounts
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
+
   const camperTypes = [
     { value: '', label: 'All Types' },
     { value: 'motorhome', label: 'Motorhome' },

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Star, Users, MapPin, Wifi, Zap, Droplets, ChefHat, Wind, Sun, Tent, Calendar, MessageCircle } from 'lucide-react';
 import { Camper } from '../../types';
 
@@ -13,6 +13,22 @@ const CamperModal: React.FC<CamperModalProps> = ({ camper, isOpen, onClose, onBo
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [checkIn, setCheckIn] = useState('');
   const [checkOut, setCheckOut] = useState('');
+
+  // Disable/enable body scroll when modal opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      // Disable scrolling
+      document.body.style.overflow = 'hidden';
+    } else {
+      // Re-enable scrolling
+      document.body.style.overflow = 'unset';
+    }
+
+    // Cleanup function to ensure scrolling is re-enabled when component unmounts
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
 
   if (!isOpen || !camper) return null;
 

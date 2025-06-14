@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, User as UserIcon, Camera, Car, PlusCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -21,6 +21,22 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ isOpen, onClose, us
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { createUserProfile } = useAuth();
+
+  // Disable/enable body scroll when modal opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      // Disable scrolling
+      document.body.style.overflow = 'hidden';
+    } else {
+      // Re-enable scrolling
+      document.body.style.overflow = 'unset';
+    }
+
+    // Cleanup function to ensure scrolling is re-enabled when component unmounts
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
 
   // Enhanced logging
   React.useEffect(() => {
