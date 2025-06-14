@@ -28,6 +28,7 @@ const AppContent: React.FC = () => {
   const [isFilterSidebarOpen, setIsFilterSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [authModalDefaultRole, setAuthModalDefaultRole] = useState<'owner' | 'customer'>('customer');
   const [filters, setFilters] = useState<FilterOptions>({
     priceRange: [0, 500],
     capacity: 0,
@@ -35,7 +36,7 @@ const AppContent: React.FC = () => {
     features: []
   });
 
-  const { needsProfileSetup, pendingUserData, loading } = useAuth();
+  const { needsProfileSetup, pendingUserData, loading, isAuthenticated } = useAuth();
 
   // Enhanced logging for modal visibility
   React.useEffect(() => {
@@ -125,6 +126,24 @@ const AppContent: React.FC = () => {
     console.log('⚠️ Profile setup cannot be closed without completion');
   };
 
+  // Handle auth modal opening with default role
+  const handleAuthClick = (defaultRole: 'owner' | 'customer' = 'customer') => {
+    setAuthModalDefaultRole(defaultRole);
+    setIsAuthModalOpen(true);
+  };
+
+  // Handle "Add Campervan" button click
+  const handleAddCampervanClick = () => {
+    if (!isAuthenticated) {
+      // Open auth modal with owner role pre-selected
+      handleAuthClick('owner');
+    } else {
+      // User is authenticated, handle add campervan logic
+      console.log('🚗 Add campervan functionality for authenticated user');
+      // TODO: Navigate to add campervan page or open modal
+    }
+  };
+
   // Show modal conditions
   const shouldShowProfileModal = needsProfileSetup && pendingUserData && !loading;
   
@@ -137,10 +156,17 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header onSearch={handleSearch} onAuthClick={() => setIsAuthModalOpen(true)} />
+      <Header 
+        onSearch={handleSearch} 
+        onAuthClick={() => handleAuthClick('customer')}
+        onAddCampervanClick={handleAddCampervanClick}
+      />
       
       {/* Hero Section */}
-      <Hero onSearch={handleSearch} />
+      <Hero 
+        onSearch={handleSearch} 
+        onAddCampervanClick={handleAddCampervanClick}
+      />
       
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -199,6 +225,7 @@ const AppContent: React.FC = () => {
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
+        defaultRole={authModalDefaultRole}
       />
 
       {/* User Profile Setup Modal - ENHANCED VISIBILITY */}
@@ -209,6 +236,7 @@ const AppContent: React.FC = () => {
             isOpen={true}
             onClose={handleProfileSetupClose}
             userData={pendingUserData}
+            defaultRole={pendingUserData?.preferredRole || 'customer'}
           />
         </>
       )}
@@ -231,6 +259,7 @@ const AppContent: React.FC = () => {
             <div>Pending Data: {pendingUserData ? '✅ YES' : '❌ NO'}</div>
             <div>Pending Name: {pendingUserData?.name || 'N/A'}</div>
             <div>Pending Email: {pendingUserData?.email || 'N/A'}</div>
+            <div>Default Role: {authModalDefaultRole}</div>
             <div className="border-t border-gray-600 pt-2 mt-2">
               <div className={`font-bold ${shouldShowProfileModal ? 'text-green-400' : 'text-red-400'}`}>
                 Modal Should Show: {shouldShowProfileModal ? '✅ YES' : '❌ NO'}

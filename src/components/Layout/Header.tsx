@@ -5,9 +5,10 @@ import { useAuth } from '../../contexts/AuthContext';
 interface HeaderProps {
   onSearch?: (query: string) => void;
   onAuthClick: () => void;
+  onAddCampervanClick?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
+const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick, onAddCampervanClick }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const { user, logout, isAuthenticated, loading } = useAuth();
@@ -124,7 +125,10 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
 
             {/* Show "Pridať Campervan" for unauthenticated users OR owners */}
             {(!isAuthenticated || (user && user.role === 'owner')) && (
-              <button className="flex items-center space-x-1 px-4 py-2 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors rounded-lg">
+              <button 
+                onClick={onAddCampervanClick}
+                className="flex items-center space-x-1 px-4 py-2 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors rounded-lg"
+              >
                 <PlusCircle className="h-4 w-4" />
                 <span>Pridať Campervan</span>
               </button>
@@ -248,7 +252,10 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
 
                   {/* Show "Pridať Campervan" only for owners */}
                   {user.role === 'owner' && (
-                    <button className="flex items-center space-x-2 w-full px-3 py-3 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors rounded-lg">
+                    <button 
+                      onClick={onAddCampervanClick}
+                      className="flex items-center space-x-2 w-full px-3 py-3 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors rounded-lg"
+                    >
                       <PlusCircle className="h-4 w-4" />
                       <span>Pridať Campervan</span>
                     </button>
@@ -315,7 +322,10 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
                     <span>Prenajať Campervany</span>
                   </button>
 
-                  <button className="flex items-center space-x-2 w-full px-3 py-3 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors rounded-lg">
+                  <button 
+                    onClick={onAddCampervanClick}
+                    className="flex items-center space-x-2 w-full px-3 py-3 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors rounded-lg"
+                  >
                     <PlusCircle className="h-4 w-4" />
                     <span>Pridať Campervan</span>
                   </button>

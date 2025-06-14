@@ -5,19 +5,28 @@ import { useAuth } from '../../contexts/AuthContext';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
+  defaultRole?: 'owner' | 'customer';
 }
 
-const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
+const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, defaultRole = 'customer' }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
-    role: 'customer' as 'owner' | 'customer'
+    role: defaultRole
   });
   const [error, setError] = useState<string | null>(null);
   const { login, register, loginWithGoogle, loading } = useAuth();
+
+  // Update role when defaultRole prop changes
+  useEffect(() => {
+    setFormData(prev => ({
+      ...prev,
+      role: defaultRole
+    }));
+  }, [defaultRole]);
 
   // Disable/enable body scroll when modal opens/closes
   useEffect(() => {
@@ -80,7 +89,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         setError(result.error.message);
       } else {
         onClose();
-        setFormData({ name: '', email: '', password: '', role: 'customer' });
+        setFormData({ name: '', email: '', password: '', role: defaultRole });
       }
     } catch (error) {
       console.error('Authentication error:', error);
@@ -113,7 +122,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const handleModalSwitch = () => {
     setIsLogin(!isLogin);
     setError(null);
-    setFormData({ name: '', email: '', password: '', role: 'customer' });
+    setFormData({ name: '', email: '', password: '', role: defaultRole });
   };
 
   if (!isOpen) return null;

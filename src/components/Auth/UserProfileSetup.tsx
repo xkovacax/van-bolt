@@ -10,17 +10,33 @@ interface UserProfileSetupProps {
     email: string;
     name: string;
     avatar?: string;
+    preferredRole?: 'owner' | 'customer';
   } | null;
+  defaultRole?: 'owner' | 'customer';
 }
 
-const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ isOpen, onClose, userData }) => {
+const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ 
+  isOpen, 
+  onClose, 
+  userData, 
+  defaultRole = 'customer' 
+}) => {
   const [formData, setFormData] = useState({
     name: userData?.name || '',
-    role: 'customer' as 'owner' | 'customer'
+    role: userData?.preferredRole || defaultRole
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { createUserProfile } = useAuth();
+
+  // Update role when userData or defaultRole changes
+  useEffect(() => {
+    setFormData(prev => ({
+      ...prev,
+      name: userData?.name || '',
+      role: userData?.preferredRole || defaultRole
+    }));
+  }, [userData, defaultRole]);
 
   // Disable/enable body scroll when modal opens/closes
   useEffect(() => {
@@ -44,9 +60,12 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ isOpen, onClose, us
       isOpen,
       hasUserData: !!userData,
       userName: userData?.name,
-      userEmail: userData?.email
+      userEmail: userData?.email,
+      preferredRole: userData?.preferredRole,
+      defaultRole,
+      currentRole: formData.role
     });
-  }, [isOpen, userData]);
+  }, [isOpen, userData, defaultRole, formData.role]);
 
   // Don't render if not open or no userData
   if (!isOpen || !userData) {
@@ -325,6 +344,8 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ isOpen, onClose, us
             <div>Email: {userData.email}</div>
             <div>Name: {userData.name}</div>
             <div>Avatar: {userData.avatar ? 'Yes' : 'No'}</div>
+            <div>Preferred Role: {userData.preferredRole || 'None'}</div>
+            <div>Default Role: {defaultRole}</div>
             <div>Selected Role: {formData.role}</div>
           </div>
         )}

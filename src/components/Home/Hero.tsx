@@ -5,9 +5,10 @@ import 'react-datepicker/dist/react-datepicker.css';
 
 interface HeroProps {
   onSearch: (query: string) => void;
+  onAddCampervanClick?: () => void;
 }
 
-const Hero: React.FC<HeroProps> = ({ onSearch }) => {
+const Hero: React.FC<HeroProps> = ({ onSearch, onAddCampervanClick }) => {
   const locationInputRef = useRef<HTMLInputElement>(null);
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
@@ -195,7 +196,10 @@ const Hero: React.FC<HeroProps> = ({ onSearch }) => {
                       <span>Overení užívatelia</span>
                     </div>
                   </div>
-                  <button className="w-full bg-white text-orange-600 py-3 px-6 rounded-xl text-base font-bold hover:bg-orange-50 transition-colors shadow-lg">
+                  <button 
+                    onClick={onAddCampervanClick}
+                    className="w-full bg-white text-orange-600 py-3 px-6 rounded-xl text-base font-bold hover:bg-orange-50 transition-colors shadow-lg"
+                  >
                     Pridať Campervan
                   </button>
                 </div>
@@ -266,7 +270,10 @@ const Hero: React.FC<HeroProps> = ({ onSearch }) => {
           </div>
           
           <div className="text-center">
-            <button className="bg-gradient-to-r from-orange-500 to-orange-600 text-white px-10 py-4 rounded-xl font-bold text-lg hover:from-orange-600 hover:to-orange-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1">
+            <button 
+              onClick={onAddCampervanClick}
+              className="bg-gradient-to-r from-orange-500 to-orange-600 text-white px-10 py-4 rounded-xl font-bold text-lg hover:from-orange-600 hover:to-orange-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+            >
               Začnite zarábať už dnes
             </button>
           </div>
