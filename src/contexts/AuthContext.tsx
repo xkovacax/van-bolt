@@ -43,14 +43,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('🚀 AuthProvider initializing...');
     
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('🔄 Initial session check:', session?.user?.id);
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      console.log('🔄 Initial session check:', { 
+        hasSession: !!session, 
+        userId: session?.user?.id,
+        error: error?.message 
+      });
+      
+      if (error) {
+        console.error('❌ Session error:', error);
+        setLoading(false);
+        return;
+      }
+      
       setSession(session);
       if (session?.user) {
         handleUserSession(session.user);
       } else {
+        console.log('✅ No session found, setting loading to false');
         setLoading(false);
       }
+    }).catch((error) => {
+      console.error('❌ Session check failed:', error);
+      setLoading(false);
     });
 
     // Listen for auth changes
@@ -79,54 +94,55 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const handleUserSession = async (supabaseUser: SupabaseUser) => {
+    console.log('👤 Starting handleUserSession for:', supabaseUser.id);
+    
     try {
-      console.log('👤 Handling user session for:', supabaseUser.id);
       console.log('👤 User metadata:', supabaseUser.user_metadata);
       
       // Check if user profile exists in database
+      console.log('📊 Checking user profile in database...');
       const { data: userProfile, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', supabaseUser.id)
         .single();
 
-      console.log('📊 Database query result:', { userProfile, error });
+      console.log('📊 Database query result:', { 
+        hasProfile: !!userProfile, 
+        error: error?.code,
+        errorMessage: error?.message 
+      });
 
-      if (error && error.code === 'PGRST116') {
-        // User profile doesn't exist - need profile setup
-        console.log('❌ User profile not found - triggering setup modal');
-        
-        const userData = {
-          id: supabaseUser.id,
-          email: supabaseUser.email || '',
-          name: supabaseUser.user_metadata?.full_name || 
-                supabaseUser.user_metadata?.name || 
-                supabaseUser.email?.split('@')[0] || 'User',
-          avatar: supabaseUser.user_metadata?.avatar_url || 
-                  supabaseUser.user_metadata?.picture
-        };
-        
-        console.log('📝 Setting up profile with data:', userData);
-        console.log('🎯 Setting needsProfileSetup = true');
-        
-        setPendingUserData(userData);
-        setNeedsProfileSetup(true);
-        setUser(null);
-        setLoading(false);
-        
-        // Force a re-render to ensure modal shows
-        setTimeout(() => {
-          console.log('🔄 Force state check - needsProfileSetup:', true);
-          console.log('🔄 Force state check - pendingUserData:', userData);
-        }, 100);
-        
-        return;
-      } 
-      
       if (error) {
-        console.error('❌ Database error:', error);
-        setLoading(false);
-        return;
+        if (error.code === 'PGRST116') {
+          // User profile doesn't exist - need profile setup
+          console.log('❌ User profile not found - triggering setup modal');
+          
+          const userData = {
+            id: supabaseUser.id,
+            email: supabaseUser.email || '',
+            name: supabaseUser.user_metadata?.full_name || 
+                  supabaseUser.user_metadata?.name || 
+                  supabaseUser.email?.split('@')[0] || 'User',
+            avatar: supabaseUser.user_metadata?.avatar_url || 
+                    supabaseUser.user_metadata?.picture
+          };
+          
+          console.log('📝 Setting up profile with data:', userData);
+          console.log('🎯 Setting needsProfileSetup = true');
+          
+          setPendingUserData(userData);
+          setNeedsProfileSetup(true);
+          setUser(null);
+          setLoading(false);
+          
+          return;
+        } else {
+          // Other database error
+          console.error('❌ Database error:', error);
+          setLoading(false);
+          return;
+        }
       }
 
       if (userProfile) {
@@ -146,6 +162,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('❌ Error in handleUserSession:', error);
     } finally {
+      console.log('✅ Setting loading to false');
       setLoading(false);
     }
   };
@@ -326,11 +343,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     });
     
     // CRITICAL: Log when modal should show
-    if (needsProfileSetup && pendingUserData) {
+    if (needsProfileSetup && pendingUserData && !loading) {
       console.log('🚨 MODAL SHOULD BE VISIBLE NOW!');
       console.log('🚨 Modal conditions met:', {
         needsProfileSetup: true,
-        pendingUserData: !!pendingUserData
+        pendingUserData: !!pendingUserData,
+        loading: false
       });
     }
   }, [user, session, loading, needsProfileSetup, pendingUserData]);
