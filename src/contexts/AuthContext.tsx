@@ -84,6 +84,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [needsProfileSetup, setNeedsProfileSetup] = useState(false);
   const [pendingUserData, setPendingUserData] = useState<any>(null);
+  
+  // CRITICAL: Track if we just created a profile to prevent modal re-showing
+  const [justCreatedProfile, setJustCreatedProfile] = useState(false);
 
   useEffect(() => {
     console.log('🚀 AuthProvider initializing...');
@@ -139,6 +142,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUser(null);
     setNeedsProfileSetup(false);
     setPendingUserData(null);
+    setJustCreatedProfile(false);
     setLoading(false);
   };
 
@@ -200,6 +204,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('👤 ===== STARTING handleUserSession =====');
     console.log('👤 User ID:', supabaseUser.id);
     console.log('👤 User email:', supabaseUser.email);
+    console.log('🔒 Just created profile flag:', justCreatedProfile);
+    
+    // CRITICAL: If we just created a profile, skip the modal logic entirely
+    if (justCreatedProfile) {
+      console.log('🚫 SKIPPING modal logic - profile was just created');
+      
+      // Fetch the fresh profile from database
+      const userProfile = await fetchUserProfile(supabaseUser.id);
+      if (userProfile) {
+        console.log('✅ Setting user from fresh profile after creation');
+        setUser(userProfile);
+        setNeedsProfileSetup(false);
+        setPendingUserData(null);
+        setLoading(false);
+        
+        // Reset the flag after successful load
+        setJustCreatedProfile(false);
+        
+        console.log('🎯 MODAL CHECK: Profile just created, user loaded', {
+          needsSetup: false,
+          hasPendingData: false,
+          modalShouldShow: false,
+          hasUser: true,
+          userName: userProfile.name,
+          userRole: userProfile.role,
+          reason: 'just_created_profile',
+          timestamp: new Date().toISOString()
+        });
+        
+        console.log('👤 ===== ENDING handleUserSession (JUST CREATED) =====');
+        return;
+      } else {
+        console.error('❌ Failed to fetch profile after creation - falling back to normal flow');
+        setJustCreatedProfile(false);
+      }
+    }
     
     try {
       console.log('📊 STEP 1: Checking user profile in database...');
@@ -289,6 +329,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     });
     setNeedsProfileSetup(false);
     setPendingUserData(null);
+    setJustCreatedProfile(false);
     setLoading(false);
   };
 
@@ -312,6 +353,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setPendingUserData(userData);
     setNeedsProfileSetup(true);
     setUser(null);
+    setJustCreatedProfile(false);
     setLoading(false);
     
     console.log('🎯 Profile setup modal should now show');
@@ -380,6 +422,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       console.log('✅ User profile created successfully:', newUser);
 
+      // CRITICAL: Set the flag to prevent modal re-showing
+      console.log('🔒 Setting justCreatedProfile flag to prevent modal re-showing');
+      setJustCreatedProfile(true);
+
       // CRITICAL: Clean up preferred role ONLY after successful profile creation
       console.log('🧹 Profile created successfully - cleaning up preferred role from localStorage');
       localStorage.removeItem('preferredRole');
@@ -426,6 +472,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         hasUser: true,
         userName: userFromDb.name,
         userRole: userFromDb.role,
+        justCreatedProfile: true,
         reason: 'profile_created',
         timestamp: new Date().toISOString()
       });
@@ -435,6 +482,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return { error: null };
     } catch (error) {
       console.error('❌ Profile creation error:', error);
+      setJustCreatedProfile(false);
       console.log('🔨 ===== ENDING createUserProfile (ERROR) =====');
       return { error };
     }
@@ -528,6 +576,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         if (userError) {
           console.error('Error creating user profile:', userError);
+        } else {
+          // Set flag to prevent modal showing after regular registration
+          setJustCreatedProfile(true);
         }
       } catch (error) {
         console.error('Profile creation timeout or error:', error);
@@ -542,6 +593,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('❌ Cancelling profile setup');
     setNeedsProfileSetup(false);
     setPendingUserData(null);
+    setJustCreatedProfile(false);
   };
 
   const value = {
