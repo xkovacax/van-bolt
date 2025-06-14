@@ -98,8 +98,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('👤 User ID:', supabaseUser.id);
     console.log('👤 User email:', supabaseUser.email);
     
+    // CRITICAL: Reset modal state immediately to prevent flashing
+    setNeedsProfileSetup(false);
+    setPendingUserData(null);
+    
     try {
-      // OPTIMIZED: Use faster query with specific columns and shorter timeout
       console.log('📊 STEP 1: Quick user profile check...');
       
       const queryStartTime = Date.now();
@@ -132,9 +135,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           queryTime: `${queryTime}ms`
         });
         
-        // Assume user needs profile setup on any error
-        console.log('🎯 FALLBACK: Assuming user needs profile setup due to query error');
-        setupPendingProfile(supabaseUser);
+        // Only setup profile if it's a real "not found" error
+        if (dbError.code === 'PGRST116' || dbError.message?.includes('not found')) {
+          console.log('🎯 User not found - setting up profile creation');
+          setupPendingProfile(supabaseUser);
+        } else {
+          console.log('⚠️ Database error but not "not found" - assuming user exists');
+          // Fallback: create basic user object
+          setUser({
+            id: supabaseUser.id,
+            name: supabaseUser.user_metadata?.full_name || 'User',
+            email: supabaseUser.email || '',
+            role: 'customer',
+            avatar: supabaseUser.user_metadata?.avatar_url
+          });
+          setLoading(false);
+        }
         return;
       }
 
@@ -142,6 +158,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (userProfile) {
         console.log(`✅ User profile found in ${queryTime}ms`);
         
+        // CRITICAL: Set user immediately and ensure modal state is cleared
         setUser({
           id: userProfile.id,
           name: userProfile.name || 'User',
@@ -151,11 +168,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           rating: userProfile.rating,
           reviewCount: userProfile.review_count
         });
+        
+        // Ensure modal state is completely cleared
         setNeedsProfileSetup(false);
         setPendingUserData(null);
         setLoading(false);
         
-        console.log('✅ User state updated successfully');
+        console.log('✅ User state updated successfully - modal should NOT show');
       } else {
         // No profile found - need profile setup
         console.log(`🎯 No profile found in ${queryTime}ms - triggering setup modal`);
@@ -164,9 +183,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('❌ CRITICAL ERROR in handleUserSession:', error);
       
-      // If there's a critical error, assume user needs profile setup
-      console.log('🎯 CRITICAL ERROR FALLBACK: Assuming user needs profile setup');
-      setupPendingProfile(supabaseUser);
+      // If there's a critical error, assume user exists to prevent modal flashing
+      console.log('🎯 CRITICAL ERROR FALLBACK: Assuming user exists to prevent modal flash');
+      setUser({
+        id: supabaseUser.id,
+        name: supabaseUser.user_metadata?.full_name || 'User',
+        email: supabaseUser.email || '',
+        role: 'customer',
+        avatar: supabaseUser.user_metadata?.avatar_url
+      });
+      setNeedsProfileSetup(false);
+      setPendingUserData(null);
+      setLoading(false);
     }
     
     console.log('👤 ===== ENDING handleUserSession =====');
@@ -185,10 +213,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
     
     console.log('📝 Setting up pending profile:', userData);
+    
+    // CRITICAL: Only set these if we're sure the user needs setup
     setPendingUserData(userData);
     setNeedsProfileSetup(true);
     setUser(null);
     setLoading(false);
+    
+    console.log('🎯 Profile setup modal should now show');
   };
 
   const createUserProfile = async (userData: { name: string; role: 'owner' | 'customer' }) => {
@@ -208,7 +240,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name)}&size=150&background=059669&color=fff&bold=true`;
       }
 
-      // OPTIMIZED: Create user profile with faster insert
       console.log('🔨 Inserting into database...');
       const insertStartTime = Date.now();
       
@@ -238,7 +269,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       console.log('✅ User profile created successfully:', newUser);
 
-      // OPTIMIZED: Update auth metadata in background (don't wait for it)
+      // Update auth metadata in background (don't wait for it)
       supabase.auth.updateUser({
         data: {
           full_name: userData.name.trim(),
@@ -264,7 +295,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         reviewCount: newUser.review_count
       });
 
-      // Clear pending setup
+      // Clear pending setup - CRITICAL for preventing modal flash
       console.log('🔨 Clearing pending setup state...');
       setNeedsProfileSetup(false);
       setPendingUserData(null);
@@ -366,15 +397,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setPendingUserData(null);
   };
 
-  // Simplified debug logging
+  // Enhanced debug logging with modal state tracking
   useEffect(() => {
     const shouldShowModal = needsProfileSetup && pendingUserData && !loading;
     console.log('🔍 AUTH STATE:', {
       hasUser: !!user,
+      userName: user?.name,
       hasSession: !!session,
+      sessionUserId: session?.user?.id,
       loading,
       needsProfileSetup,
-      modalShouldShow: shouldShowModal
+      hasPendingData: !!pendingUserData,
+      modalShouldShow: shouldShowModal,
+      timestamp: new Date().toISOString()
     });
   }, [user, session, loading, needsProfileSetup, pendingUserData]);
 
