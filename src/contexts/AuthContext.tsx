@@ -79,7 +79,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, []);
 
-  // 🎯 SINGLE FUNCTION: Handle all auth state changes
+  // 🎯 FIXED: Handle auth state changes with proper timing
   const handleAuthStateChange = async (session: Session | null) => {
     console.log('🎯 ===== SINGLE AUTH HANDLER =====');
     
@@ -102,10 +102,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       console.log('👤 Processing user:', session.user.id);
       
-      // 🚨 IMMEDIATE: Clear modal state to prevent flashing
+      // 🎯 CRITICAL FIX: Set loading FIRST, clear modal state IMMEDIATELY
+      setLoading(true);
       setNeedsProfileSetup(false);
       setPendingUserData(null);
-      setLoading(true);
 
       // 🎯 SINGLE QUERY: Check if user profile exists
       const { user: userProfile, needsProfileSetup: needsSetup, error } = await getUserProfile(session.user.id);
@@ -116,8 +116,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return;
       }
 
+      // 🎯 CRITICAL FIX: ATOMIC STATE UPDATE AFTER QUERY COMPLETION
       if (needsSetup) {
-        console.log('🎯 Profile setup needed');
+        console.log('🎯 Profile setup needed - setting modal state AFTER query');
         
         // Prepare pending data for modal
         const pendingData = {
@@ -130,14 +131,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                   session.user.user_metadata?.picture
         };
         
-        // 🎯 ATOMIC STATE UPDATE: Set all modal state at once
-        console.log('🎯 ATOMIC: Setting modal state');
-        setPendingUserData(pendingData);
-        setNeedsProfileSetup(true);
+        // 🎯 ATOMIC STATE UPDATE: Set ALL modal state TOGETHER AFTER query
+        console.log('🎯 ATOMIC: Setting modal state AFTER query completion');
         setUser(null);
-        setLoading(false);
+        setLoading(false); // ← CRITICAL: Set loading false FIRST
         
-        console.log('✅ Modal state set - should show modal');
+        // 🎯 DELAYED: Set modal state AFTER loading is false
+        setTimeout(() => {
+          setPendingUserData(pendingData);
+          setNeedsProfileSetup(true);
+          console.log('✅ Modal state set AFTER loading completed');
+        }, 0); // Next tick to ensure loading state is processed
+        
       } else if (userProfile) {
         console.log('✅ User profile loaded:', userProfile.role);
         

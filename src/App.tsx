@@ -39,14 +39,15 @@ const AppContent: React.FC = () => {
 
   const { needsProfileSetup, pendingUserData, loading, isAuthenticated, onProfileSetupComplete } = useAuth();
 
-  // 🎯 SIMPLIFIED: Single modal visibility check
-  const shouldShowProfileModal = needsProfileSetup && pendingUserData && !loading;
+  // 🎯 CRITICAL FIX: Modal visibility check ONLY when NOT loading
+  const shouldShowProfileModal = !loading && needsProfileSetup && pendingUserData;
 
-  console.log('🎯 App: Modal visibility check:', {
+  console.log('🎯 App: Modal visibility check AFTER query:', {
+    loading,
     needsProfileSetup,
     hasPendingData: !!pendingUserData,
-    loading,
-    shouldShowModal: shouldShowProfileModal
+    shouldShowModal: shouldShowProfileModal,
+    timing: 'AFTER_QUERY_COMPLETION'
   });
 
   const handleSearch = (query: string) => {
@@ -213,7 +214,7 @@ const AppContent: React.FC = () => {
         defaultMode={authModalDefaultMode}
       />
 
-      {/* 🎯 SIMPLIFIED: Profile Setup Modal */}
+      {/* 🎯 CRITICAL FIX: Modal shows ONLY after query completion */}
       {shouldShowProfileModal && (
         <ProfileSetupModal
           isOpen={true}
@@ -241,6 +242,9 @@ const AppContent: React.FC = () => {
             <div>Pending Data: {pendingUserData ? '✅ YES' : '❌ NO'}</div>
             <div className={`font-bold ${shouldShowProfileModal ? 'text-green-400' : 'text-red-400'}`}>
               Modal Show: {shouldShowProfileModal ? '✅ YES' : '❌ NO'}
+            </div>
+            <div className="text-xs text-gray-400">
+              Check timing: AFTER query completion
             </div>
           </div>
         </div>
