@@ -102,24 +102,50 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       // STEP 1: Check if user profile exists in database
       console.log('📊 STEP 1: Checking user profile in database...');
+      console.log('📊 Supabase client status:', !!supabase);
+      console.log('📊 Query details:', {
+        table: 'users',
+        filter: `id = ${supabaseUser.id}`,
+        method: 'single()'
+      });
       
-      const { data: userProfile, error: dbError } = await supabase
+      // Add timeout to prevent hanging
+      const queryPromise = supabase
         .from('users')
         .select('*')
         .eq('id', supabaseUser.id)
         .single();
 
-      console.log('📊 Database query completed');
+      console.log('📊 Query created, executing...');
+      
+      // Set a timeout for the query
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Database query timeout')), 10000); // 10 second timeout
+      });
+
+      const { data: userProfile, error: dbError } = await Promise.race([
+        queryPromise,
+        timeoutPromise
+      ]) as any;
+
+      console.log('📊 ===== DATABASE QUERY COMPLETED =====');
       console.log('📊 Query result:', { 
         hasProfile: !!userProfile, 
         error: dbError?.code,
         errorMessage: dbError?.message,
+        errorDetails: dbError?.details,
+        errorHint: dbError?.hint,
         profileData: userProfile
       });
 
       // STEP 2: Handle database response
       if (dbError) {
-        console.log('❌ Database error detected:', dbError.code);
+        console.log('❌ Database error detected:', {
+          code: dbError.code,
+          message: dbError.message,
+          details: dbError.details,
+          hint: dbError.hint
+        });
         
         if (dbError.code === 'PGRST116') {
           // User profile doesn't exist - need profile setup
@@ -150,6 +176,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         } else {
           // Other database error
           console.error('❌ STEP 2B: Other database error:', dbError);
+          console.error('❌ This might be a permissions or RLS issue');
+          
+          // For now, assume user needs profile setup if we can't query
+          console.log('🎯 FALLBACK: Assuming user needs profile setup due to query error');
+          
+          const userData = {
+            id: supabaseUser.id,
+            email: supabaseUser.email || '',
+            name: supabaseUser.user_metadata?.full_name || 
+                  supabaseUser.user_metadata?.name || 
+                  supabaseUser.email?.split('@')[0] || 'User',
+            avatar: supabaseUser.user_metadata?.avatar_url || 
+                    supabaseUser.user_metadata?.picture
+          };
+          
+          setPendingUserData(userData);
+          setNeedsProfileSetup(true);
+          setUser(null);
           setLoading(false);
           return;
         }
@@ -174,6 +218,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setLoading(false);
         
         console.log('✅ User state updated successfully');
+      } else {
+        // No profile found but no error - this shouldn't happen with single()
+        console.log('⚠️ STEP 3B: No profile found and no error - assuming needs setup');
+        
+        const userData = {
+          id: supabaseUser.id,
+          email: supabaseUser.email || '',
+          name: supabaseUser.user_metadata?.full_name || 
+                supabaseUser.user_metadata?.name || 
+                supabaseUser.email?.split('@')[0] || 'User',
+          avatar: supabaseUser.user_metadata?.avatar_url || 
+                  supabaseUser.user_metadata?.picture
+        };
+        
+        setPendingUserData(userData);
+        setNeedsProfileSetup(true);
+        setUser(null);
+        setLoading(false);
       }
     } catch (error) {
       console.error('❌ CRITICAL ERROR in handleUserSession:', error);
@@ -182,6 +244,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         message: error.message,
         stack: error.stack
       });
+      
+      // If there's a critical error, assume user needs profile setup
+      console.log('🎯 CRITICAL ERROR FALLBACK: Assuming user needs profile setup');
+      
+      const userData = {
+        id: supabaseUser.id,
+        email: supabaseUser.email || '',
+        name: supabaseUser.user_metadata?.full_name || 
+              supabaseUser.user_metadata?.name || 
+              supabaseUser.email?.split('@')[0] || 'User',
+        avatar: supabaseUser.user_metadata?.avatar_url || 
+                supabaseUser.user_metadata?.picture
+      };
+      
+      setPendingUserData(userData);
+      setNeedsProfileSetup(true);
+      setUser(null);
       setLoading(false);
     }
     
