@@ -25,18 +25,14 @@ const AuthCallback: React.FC = () => {
       console.log('🔄 Redirecting to home page...');
       setRedirecting(true);
       
-      // Small delay to ensure state is properly set
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 500);
+      // Immediate redirect without delay
+      window.location.href = '/';
     }
 
     // If no session after loading, something went wrong
     if (!loading && !session) {
       console.log('❌ No session found, redirecting to home');
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 2000);
+      window.location.href = '/';
     }
   }, [session, loading, needsProfileSetup, pendingUserData, redirecting]);
 

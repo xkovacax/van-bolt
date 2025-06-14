@@ -18,7 +18,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: true
   },
-  // PERFORMANCE OPTIMIZATION: Add connection pooling and timeout settings
   db: {
     schema: 'public'
   },
@@ -29,21 +28,14 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 });
 
-// OPTIMIZED: Faster connection test with timeout
+// Simple connection test without timeout
 const testConnection = async () => {
   try {
     const startTime = Date.now();
     
-    // Use a simple count query with timeout
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Connection test timeout')), 3000);
-    });
-    
-    const queryPromise = supabase
+    const { error } = await supabase
       .from('users')
       .select('*', { count: 'exact', head: true });
-    
-    const { error } = await Promise.race([queryPromise, timeoutPromise]) as any;
     
     const testTime = Date.now() - startTime;
     

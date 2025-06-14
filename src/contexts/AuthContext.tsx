@@ -107,22 +107,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       const queryStartTime = Date.now();
       
-      // Optimized query - only select needed columns
-      const queryPromise = supabase
+      // Simple query without timeout
+      const { data: userProfile, error: dbError } = await supabase
         .from('users')
         .select('id, name, email, role, avatar, rating, review_count')
         .eq('id', supabaseUser.id)
-        .maybeSingle(); // Use maybeSingle instead of single to avoid error on no results
-
-      // Reduced timeout to 5 seconds
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Database query timeout (5s)')), 5000);
-      });
-
-      const { data: userProfile, error: dbError } = await Promise.race([
-        queryPromise,
-        timeoutPromise
-      ]) as any;
+        .maybeSingle();
 
       const queryTime = Date.now() - queryStartTime;
       console.log(`📊 Query completed in ${queryTime}ms`);
