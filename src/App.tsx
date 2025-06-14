@@ -39,16 +39,15 @@ const AppContent: React.FC = () => {
 
   const { needsProfileSetup, pendingUserData, loading, isAuthenticated, onProfileSetupComplete } = useAuth();
 
-  // Enhanced logging for modal visibility
-  React.useEffect(() => {
-    console.log('🎯 APP COMPONENT STATE:', {
-      needsProfileSetup,
-      hasPendingUserData: !!pendingUserData,
-      pendingUserName: pendingUserData?.name,
-      loading,
-      modalShouldShow: needsProfileSetup && pendingUserData && !loading
-    });
-  }, [needsProfileSetup, pendingUserData, loading]);
+  // 🎯 SIMPLIFIED: Single modal visibility check
+  const shouldShowProfileModal = needsProfileSetup && pendingUserData && !loading;
+
+  console.log('🎯 App: Modal visibility check:', {
+    needsProfileSetup,
+    hasPendingData: !!pendingUserData,
+    loading,
+    shouldShowModal: shouldShowProfileModal
+  });
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
@@ -122,57 +121,40 @@ const AppContent: React.FC = () => {
     alert(`Žiadosť o rezerváciu bola odoslaná pre ${camper.title}! Čoskoro dostanete potvrdzujúci e-mail.`);
   };
 
-  // Handle auth modal opening with default role and mode
   const handleAuthClick = (defaultRole: 'owner' | 'customer' = 'customer', defaultMode: 'login' | 'register' = 'login') => {
     setAuthModalDefaultRole(defaultRole);
     setAuthModalDefaultMode(defaultMode);
     setIsAuthModalOpen(true);
   };
 
-  // Handle "Add Campervan" button click - ALWAYS opens REGISTRATION form
   const handleAddCampervanClick = () => {
     if (!isAuthenticated) {
-      // Open REGISTRATION modal with owner role pre-selected
       console.log('🚗 Opening REGISTRATION modal for Add Campervan');
-      handleAuthClick('owner', 'register'); // Force registration mode
+      handleAuthClick('owner', 'register');
     } else {
-      // User is authenticated, handle add campervan logic
       console.log('🚗 Add campervan functionality for authenticated user');
-      // TODO: Navigate to add campervan page or open modal
     }
   };
 
-  // Handle profile setup completion
+  // 🎯 SIMPLIFIED: Profile setup completion handler
   const handleProfileSetupSuccess = (user: any) => {
     console.log('🎉 App: Profile setup completed successfully:', user);
     onProfileSetupComplete(user);
   };
 
-  // Show modal conditions
-  const shouldShowProfileModal = needsProfileSetup && pendingUserData && !loading;
-  
-  console.log('🎯 MODAL RENDER CHECK:', {
-    shouldShowProfileModal,
-    needsProfileSetup,
-    hasPendingUserData: !!pendingUserData,
-    loading
-  });
-
   return (
     <div className="min-h-screen bg-gray-50">
       <Header 
         onSearch={handleSearch} 
-        onAuthClick={() => handleAuthClick('customer', 'login')} // Normal auth opens login
+        onAuthClick={() => handleAuthClick('customer', 'login')}
         onAddCampervanClick={handleAddCampervanClick}
       />
       
-      {/* Hero Section */}
       <Hero 
         onSearch={handleSearch} 
         onAddCampervanClick={handleAddCampervanClick}
       />
       
-      {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -194,7 +176,6 @@ const AppContent: React.FC = () => {
         </div>
         
         <div className="flex gap-8">
-          {/* Desktop Filters */}
           <div className="hidden lg:block w-80 flex-shrink-0">
             <FilterSidebar
               isOpen={true}
@@ -204,7 +185,6 @@ const AppContent: React.FC = () => {
             />
           </div>
           
-          {/* Camper Grid */}
           <div className="flex-1">
             <CamperGrid
               campers={campers}
@@ -230,24 +210,20 @@ const AppContent: React.FC = () => {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         defaultRole={authModalDefaultRole}
-        defaultMode={authModalDefaultMode} // Pass the mode to control login/register
+        defaultMode={authModalDefaultMode}
       />
 
-      {/* 🎯 NEW: Reusable Profile Setup Modal */}
-      {shouldShowProfileModal && pendingUserData && (
-        <>
-          {console.log('🚨 RENDERING PROFILE SETUP MODAL!')}
-          <ProfileSetupModal
-            isOpen={true}
-            onClose={() => {}} // Don't allow closing without completion
-            onSuccess={handleProfileSetupSuccess}
-            userData={pendingUserData}
-            defaultRole={pendingUserData?.preferredRole || 'customer'}
-          />
-        </>
+      {/* 🎯 SIMPLIFIED: Profile Setup Modal */}
+      {shouldShowProfileModal && (
+        <ProfileSetupModal
+          isOpen={true}
+          onClose={() => {}} // Don't allow closing without completion
+          onSuccess={handleProfileSetupSuccess}
+          userData={pendingUserData}
+          defaultRole={pendingUserData?.preferredRole || 'customer'}
+        />
       )}
       
-      {/* Mobile Filter Sidebar */}
       <FilterSidebar
         isOpen={isFilterSidebarOpen}
         onClose={() => setIsFilterSidebarOpen(false)}
@@ -255,31 +231,18 @@ const AppContent: React.FC = () => {
         onFiltersChange={handleFiltersChange}
       />
 
-      {/* Enhanced Debug Panel - Development Only */}
+      {/* Simplified Debug Panel */}
       {process.env.NODE_ENV === 'development' && (
         <div className="fixed bottom-4 right-4 bg-black bg-opacity-90 text-white p-4 rounded-lg text-xs max-w-sm z-[60]">
-          <div className="font-bold mb-2 text-yellow-400">🔍 Auth Debug Panel</div>
+          <div className="font-bold mb-2 text-yellow-400">🔍 Auth Debug</div>
           <div className="space-y-1">
             <div>Loading: {loading ? '⏳ YES' : '✅ NO'}</div>
             <div>Profile Setup: {needsProfileSetup ? '✅ YES' : '❌ NO'}</div>
             <div>Pending Data: {pendingUserData ? '✅ YES' : '❌ NO'}</div>
-            <div>Pending Name: {pendingUserData?.name || 'N/A'}</div>
-            <div>Pending Email: {pendingUserData?.email || 'N/A'}</div>
-            <div>Default Role: {authModalDefaultRole}</div>
-            <div>Default Mode: {authModalDefaultMode}</div>
-            <div className="border-t border-gray-600 pt-2 mt-2">
-              <div className={`font-bold ${shouldShowProfileModal ? 'text-green-400' : 'text-red-400'}`}>
-                Modal Should Show: {shouldShowProfileModal ? '✅ YES' : '❌ NO'}
-              </div>
+            <div className={`font-bold ${shouldShowProfileModal ? 'text-green-400' : 'text-red-400'}`}>
+              Modal Show: {shouldShowProfileModal ? '✅ YES' : '❌ NO'}
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Force Modal Visibility Test - Development Only */}
-      {process.env.NODE_ENV === 'development' && shouldShowProfileModal && (
-        <div className="fixed top-4 left-4 bg-green-600 text-white p-2 rounded text-xs z-[70]">
-          🚨 MODAL IS ACTIVE!
         </div>
       )}
     </div>
@@ -287,7 +250,6 @@ const AppContent: React.FC = () => {
 };
 
 function App() {
-  // Check if we're on the auth callback route
   if (window.location.pathname === '/auth/callback') {
     return (
       <AuthProvider>

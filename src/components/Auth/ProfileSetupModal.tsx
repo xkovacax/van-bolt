@@ -37,7 +37,7 @@ const ProfileSetupModal: React.FC<ProfileSetupModalProps> = ({
     });
   }, [userData, defaultRole]);
 
-  // Disable/enable body scroll when modal opens/closes
+  // 🎯 CRITICAL: Only manage body scroll, no other side effects
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -50,10 +50,12 @@ const ProfileSetupModal: React.FC<ProfileSetupModalProps> = ({
     };
   }, [isOpen]);
 
-  // Don't render if not open
+  // 🎯 EARLY RETURN: Don't render anything if not open
   if (!isOpen) {
     return null;
   }
+
+  console.log('🎨 ProfileSetupModal: Rendering modal');
 
   const generateAvatar = (name: string) => {
     const initials = name
@@ -63,7 +65,6 @@ const ProfileSetupModal: React.FC<ProfileSetupModalProps> = ({
       .toUpperCase()
       .slice(0, 2);
     
-    // Generate a consistent color based on name
     const colors = [
       'bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 
       'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'
@@ -88,7 +89,7 @@ const ProfileSetupModal: React.FC<ProfileSetupModalProps> = ({
     }
 
     try {
-      console.log('🔨 ProfileSetupModal: Submitting with role:', formData.role);
+      console.log('🔨 ProfileSetupModal: Creating profile with role:', formData.role);
       
       const { user, error: serviceError } = await createUserProfile({
         id: userData.id,
@@ -104,7 +105,7 @@ const ProfileSetupModal: React.FC<ProfileSetupModalProps> = ({
       }
 
       if (user) {
-        console.log('✅ ProfileSetupModal: Profile created successfully:', user);
+        console.log('✅ ProfileSetupModal: Profile created, calling onSuccess');
         onSuccess(user);
       }
     } catch (error) {
@@ -123,7 +124,6 @@ const ProfileSetupModal: React.FC<ProfileSetupModalProps> = ({
   };
 
   const handleRoleChange = (role: 'owner' | 'customer') => {
-    console.log('🎯 ProfileSetupModal: Role changed to:', role);
     setFormData({
       ...formData,
       role
@@ -331,6 +331,7 @@ const ProfileSetupModal: React.FC<ProfileSetupModalProps> = ({
             <div>Avatar: {userData.avatar ? 'Yes' : 'No'}</div>
             <div>Default Role: {defaultRole}</div>
             <div>Selected Role: {formData.role}</div>
+            <div>Is Open: {isOpen ? 'YES' : 'NO'}</div>
           </div>
         )}
       </div>

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useRe
 import { User as SupabaseUser, Session, AuthError } from '@supabase/supabase-js';
 import { supabase, getRedirectUrl } from '../lib/supabase';
 import { User } from '../types';
-import { getUserProfile, hasAccessToken, getCurrentUserId, getUserMetadata } from '../services/userService';
+import { getUserProfile, createUserProfile } from '../services/userService';
 
 interface AuthContextType {
   user: User | null;
@@ -39,72 +39,76 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [needsProfileSetup, setNeedsProfileSetup] = useState(false);
   const [pendingUserData, setPendingUserData] = useState<any>(null);
   
-  // 🚨 CRITICAL: Prevent infinite loops with refs
-  const isProcessingUser = useRef(false);
-  const lastProcessedUserId = useRef<string | null>(null);
+  // 🚨 CRITICAL: Single processing flag to prevent all race conditions
+  const isProcessing = useRef(false);
   const authInitialized = useRef(false);
 
   useEffect(() => {
-    console.log('🚀 AuthProvider initializing with userService...');
+    console.log('🚀 AuthProvider: Single initialization...');
     
-    // 🚨 CRITICAL: Prevent multiple initializations
     if (authInitialized.current) {
-      console.log('⚠️ Auth already initialized, skipping...');
+      console.log('⚠️ Already initialized, skipping...');
       return;
     }
     authInitialized.current = true;
     
-    // Initialize auth state
-    initializeAuth();
-
-    // Listen for auth changes
+    // 🎯 SINGLE AUTH LISTENER - handles everything
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('🔄 Auth state change:', event, session?.user?.id);
-      setSession(session);
       
-      if (session?.user) {
-        await handleUserSession(session.user);
-      } else {
-        resetAuthState();
+      // 🚨 PREVENT RACE CONDITIONS
+      if (isProcessing.current) {
+        console.log('⚠️ Already processing auth change, skipping...');
+        return;
       }
+      
+      await handleAuthStateChange(session);
+    });
+
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('🔍 Initial session check:', !!session);
+      handleAuthStateChange(session);
     });
 
     return () => {
       subscription.unsubscribe();
       authInitialized.current = false;
     };
-  }, []); // 🚨 CRITICAL: Empty dependency array
+  }, []);
 
-  const initializeAuth = async () => {
+  // 🎯 SINGLE FUNCTION: Handle all auth state changes
+  const handleAuthStateChange = async (session: Session | null) => {
+    console.log('🎯 ===== SINGLE AUTH HANDLER =====');
+    
+    // 🚨 PREVENT RACE CONDITIONS
+    if (isProcessing.current) {
+      console.log('⚠️ Already processing, skipping...');
+      return;
+    }
+    isProcessing.current = true;
+
     try {
-      console.log('🔍 Checking access token...');
-      
-      // 🎯 STEP 1: Synchronously check if access token exists
-      const hasToken = await hasAccessToken();
-      
-      if (!hasToken) {
-        console.log('❌ No access token found');
-        setLoading(false);
+      // Set session immediately
+      setSession(session);
+
+      if (!session?.user) {
+        console.log('❌ No session/user, clearing state');
+        clearAuthState();
         return;
       }
 
-      console.log('✅ Access token found, getting user ID...');
+      console.log('👤 Processing user:', session.user.id);
       
-      // 🎯 STEP 2: Get current user ID
-      const userId = await getCurrentUserId();
-      
-      if (!userId) {
-        console.log('❌ No user ID found');
-        setLoading(false);
-        return;
-      }
+      // 🚨 IMMEDIATE: Clear modal state to prevent flashing
+      setNeedsProfileSetup(false);
+      setPendingUserData(null);
+      setLoading(true);
 
-      console.log('🔍 User ID found:', userId);
-      
-      // 🎯 STEP 3: Use userService to get user profile
-      const { user: userProfile, needsProfileSetup: needsSetup, error } = await getUserProfile(userId);
+      // 🎯 SINGLE QUERY: Check if user profile exists
+      const { user: userProfile, needsProfileSetup: needsSetup, error } = await getUserProfile(session.user.id);
       
       if (error) {
         console.error('❌ UserService error:', error);
@@ -113,127 +117,68 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       if (needsSetup) {
-        console.log('🎯 Profile setup needed, getting user metadata...');
+        console.log('🎯 Profile setup needed');
         
-        // Get user metadata for profile setup
-        const metadata = await getUserMetadata();
-        if (metadata) {
-          setPendingUserData(metadata);
-          setNeedsProfileSetup(true);
-        }
-        setLoading(false);
-      } else if (userProfile) {
-        console.log('✅ User profile loaded:', userProfile);
-        setUser(userProfile);
-        setLoading(false);
-      }
-
-      // Get session for context
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-
-    } catch (error) {
-      console.error('❌ Auth initialization error:', error);
-      setLoading(false);
-    }
-  };
-
-  const resetAuthState = () => {
-    console.log('🔄 Resetting auth state');
-    setUser(null);
-    setNeedsProfileSetup(false);
-    setPendingUserData(null);
-    setLoading(false);
-    isProcessingUser.current = false;
-    lastProcessedUserId.current = null;
-  };
-
-  const handleUserSession = async (supabaseUser: SupabaseUser) => {
-    console.log('👤 ===== STARTING handleUserSession with userService =====');
-    console.log('👤 User ID:', supabaseUser.id);
-    
-    // 🚨 CRITICAL: Prevent infinite loops
-    if (isProcessingUser.current) {
-      console.log('⚠️ Already processing user, skipping...');
-      return;
-    }
-    
-    if (lastProcessedUserId.current === supabaseUser.id) {
-      console.log('⚠️ Same user already processed, skipping...');
-      return;
-    }
-    
-    // Set processing flags
-    isProcessingUser.current = true;
-    lastProcessedUserId.current = supabaseUser.id;
-    
-    // 🚨 IMMEDIATE STATE RESET TO PREVENT MODAL FLASH
-    console.log('⚡ IMMEDIATE: Preventing modal flash');
-    setNeedsProfileSetup(false);
-    setPendingUserData(null);
-    setLoading(true);
-    
-    try {
-      // 🎯 USE USERSERVICE: Single query approach
-      const { user: userProfile, needsProfileSetup: needsSetup, error } = await getUserProfile(supabaseUser.id);
-      
-      if (error) {
-        console.error('❌ UserService error in handleUserSession:', error);
-        setLoading(false);
-        isProcessingUser.current = false;
-        return;
-      }
-
-      if (needsSetup) {
-        console.log('🎯 Profile setup needed from handleUserSession');
-        
+        // Prepare pending data for modal
         const pendingData = {
-          id: supabaseUser.id,
-          email: supabaseUser.email || '',
-          name: supabaseUser.user_metadata?.full_name || 
-                supabaseUser.user_metadata?.name || 
-                supabaseUser.email?.split('@')[0] || 'User',
-          avatar: supabaseUser.user_metadata?.avatar_url || 
-                  supabaseUser.user_metadata?.picture
+          id: session.user.id,
+          email: session.user.email || '',
+          name: session.user.user_metadata?.full_name || 
+                session.user.user_metadata?.name || 
+                session.user.email?.split('@')[0] || 'User',
+          avatar: session.user.user_metadata?.avatar_url || 
+                  session.user.user_metadata?.picture
         };
         
+        // 🎯 ATOMIC STATE UPDATE: Set all modal state at once
+        console.log('🎯 ATOMIC: Setting modal state');
         setPendingUserData(pendingData);
         setNeedsProfileSetup(true);
         setUser(null);
         setLoading(false);
         
-        console.log('🎯 MODAL: Profile setup modal activated');
+        console.log('✅ Modal state set - should show modal');
       } else if (userProfile) {
-        console.log('✅ User profile loaded from userService:', userProfile);
+        console.log('✅ User profile loaded:', userProfile.role);
         
+        // 🎯 ATOMIC STATE UPDATE: Set user state
         setUser(userProfile);
         setNeedsProfileSetup(false);
         setPendingUserData(null);
         setLoading(false);
         
-        console.log('🎯 SUCCESS: User loaded with role:', userProfile.role);
+        console.log('✅ User state set - no modal needed');
       }
     } catch (error) {
-      console.error('❌ CRITICAL ERROR in handleUserSession:', error);
+      console.error('❌ Auth handler error:', error);
       setLoading(false);
     } finally {
-      // 🚨 CRITICAL: Always reset processing flag
-      isProcessingUser.current = false;
+      // 🚨 ALWAYS reset processing flag
+      isProcessing.current = false;
     }
     
-    console.log('👤 ===== ENDING handleUserSession =====');
+    console.log('🎯 ===== AUTH HANDLER COMPLETE =====');
   };
 
-  const onProfileSetupComplete = (newUser: User) => {
+  const clearAuthState = () => {
+    console.log('🔄 Clearing auth state');
+    setUser(null);
+    setNeedsProfileSetup(false);
+    setPendingUserData(null);
+    setLoading(false);
+    isProcessing.current = false;
+  };
+
+  const onProfileSetupComplete = async (newUser: User) => {
     console.log('🎉 Profile setup completed:', newUser);
     
-    // Update state with new user
+    // 🎯 ATOMIC STATE UPDATE: Complete profile setup
     setUser(newUser);
     setNeedsProfileSetup(false);
     setPendingUserData(null);
+    setLoading(false);
     
-    // Update processing flags
-    lastProcessedUserId.current = newUser.id;
+    console.log('✅ Profile setup state cleared');
   };
 
   const login = async (email: string, password: string) => {
@@ -270,7 +215,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('👋 Logging out user');
     setLoading(true);
     await supabase.auth.signOut();
-    resetAuthState();
+    clearAuthState();
   };
 
   const register = async (name: string, email: string, password: string, role: 'owner' | 'customer') => {
@@ -294,8 +239,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return { error };
     }
 
-    // Note: Profile creation will be handled by the profile setup modal
-    // after redirect, not here
     setLoading(false);
     return { error };
   };
