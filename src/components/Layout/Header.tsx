@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Menu, X, User, LogOut, PlusCircle, Heart, Calendar, Car } from 'lucide-react';
+import { Search, Menu, X, User, LogOut, PlusCircle, Heart, Calendar, Car, Settings } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface HeaderProps {
@@ -113,58 +113,71 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
             )}
 
             {isAuthenticated && user ? (
-              <>
-                <button className="flex items-center space-x-1 px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
-                  <Heart className="h-4 w-4" />
-                  <span>Obľúbené</span>
+              <div className="relative">
+                <button 
+                  onClick={() => setIsMenuOpen(!isMenuOpen)}
+                  className="flex items-center space-x-2 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                >
+                  {user.avatar ? (
+                    <img
+                      src={user.avatar}
+                      alt={user.name || 'User'}
+                      className="w-8 h-8 rounded-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&size=150&background=059669&color=fff&bold=true`;
+                      }}
+                    />
+                  ) : (
+                    <div className="w-8 h-8 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-full flex items-center justify-center">
+                      <User className="h-4 w-4 text-white" />
+                    </div>
+                  )}
+                  <span className="text-sm font-medium text-gray-700">{user.name || 'User'}</span>
                 </button>
-                <button className="flex items-center space-x-1 px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
-                  <Calendar className="h-4 w-4" />
-                  <span>Rezervácie</span>
-                </button>
-                <div className="relative">
-                  <button 
-                    onClick={() => setIsMenuOpen(!isMenuOpen)}
-                    className="flex items-center space-x-2 p-2 rounded-full hover:bg-gray-100 transition-colors"
-                  >
-                    {user.avatar ? (
-                      <img
-                        src={user.avatar}
-                        alt={user.name || 'User'}
-                        className="w-8 h-8 rounded-full object-cover"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&size=150&background=059669&color=fff&bold=true`;
-                        }}
-                      />
-                    ) : (
-                      <div className="w-8 h-8 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-full flex items-center justify-center">
-                        <User className="h-4 w-4 text-white" />
-                      </div>
-                    )}
-                    <span className="text-sm font-medium text-gray-700">{user.name || 'User'}</span>
-                  </button>
-                  
-                  {isMenuOpen && (
-                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
-                      <div className="px-4 py-2 border-b border-gray-100">
-                        <p className="text-sm font-medium text-gray-900">{user.name || 'User'}</p>
-                        <p className="text-xs text-gray-500">{user.email || ''}</p>
-                        <p className="text-xs text-gray-500 capitalize">
-                          {user.role === 'owner' ? 'Majiteľ' : 'Zákazník'}
-                        </p>
-                      </div>
+                
+                {isMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                    {/* User Info Header */}
+                    <div className="px-4 py-3 border-b border-gray-100">
+                      <p className="text-sm font-medium text-gray-900">{user.name || 'User'}</p>
+                      <p className="text-xs text-gray-500">{user.email || ''}</p>
+                      <p className="text-xs text-gray-500 capitalize">
+                        {user.role === 'owner' ? 'Majiteľ' : 'Zákazník'}
+                      </p>
+                    </div>
+
+                    {/* Menu Items */}
+                    <div className="py-1">
+                      <button className="flex items-center space-x-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors">
+                        <Heart className="h-4 w-4" />
+                        <span>Obľúbené</span>
+                      </button>
+                      
+                      <button className="flex items-center space-x-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors">
+                        <Calendar className="h-4 w-4" />
+                        <span>Rezervácie</span>
+                      </button>
+                      
+                      <button className="flex items-center space-x-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors">
+                        <Settings className="h-4 w-4" />
+                        <span>Nastavenia profilu</span>
+                      </button>
+                    </div>
+
+                    {/* Logout */}
+                    <div className="border-t border-gray-100 py-1">
                       <button
                         onClick={handleLogout}
-                        className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                        className="flex items-center space-x-3 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
                       >
                         <LogOut className="h-4 w-4" />
                         <span>Odhlásiť sa</span>
                       </button>
                     </div>
-                  )}
-                </div>
-              </>
+                  </div>
+                )}
+              </div>
             ) : (
               <button
                 onClick={onAuthClick}
@@ -223,19 +236,20 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
                     </button>
                   )}
 
-                  <div className="flex items-center space-x-3 px-3 py-2">
+                  {/* User Info */}
+                  <div className="flex items-center space-x-3 px-3 py-2 bg-gray-50 rounded-lg">
                     {user.avatar ? (
                       <img
                         src={user.avatar}
                         alt={user.name || 'User'}
-                        className="w-8 h-8 rounded-full object-cover"
+                        className="w-10 h-10 rounded-full object-cover"
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
                           target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&size=150&background=059669&color=fff&bold=true`;
                         }}
                       />
                     ) : (
-                      <div className="w-8 h-8 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-full flex items-center justify-center">
+                      <div className="w-10 h-10 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-full flex items-center justify-center">
                         <User className="h-4 w-4 text-white" />
                       </div>
                     )}
@@ -247,17 +261,29 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
                       </p>
                     </div>
                   </div>
-                  <button className="flex items-center space-x-2 w-full px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
-                    <Heart className="h-4 w-4" />
-                    <span>Obľúbené</span>
-                  </button>
-                  <button className="flex items-center space-x-2 w-full px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
-                    <Calendar className="h-4 w-4" />
-                    <span>Rezervácie</span>
-                  </button>
+
+                  {/* Mobile Menu Items */}
+                  <div className="space-y-1">
+                    <button className="flex items-center space-x-3 w-full px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors rounded-lg">
+                      <Heart className="h-4 w-4" />
+                      <span>Obľúbené</span>
+                    </button>
+                    
+                    <button className="flex items-center space-x-3 w-full px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors rounded-lg">
+                      <Calendar className="h-4 w-4" />
+                      <span>Rezervácie</span>
+                    </button>
+                    
+                    <button className="flex items-center space-x-3 w-full px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors rounded-lg">
+                      <Settings className="h-4 w-4" />
+                      <span>Nastavenia profilu</span>
+                    </button>
+                  </div>
+
+                  {/* Mobile Logout */}
                   <button
                     onClick={handleLogout}
-                    className="flex items-center space-x-2 w-full px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 transition-colors"
+                    className="flex items-center space-x-3 w-full px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors rounded-lg"
                   >
                     <LogOut className="h-4 w-4" />
                     <span>Odhlásiť sa</span>
