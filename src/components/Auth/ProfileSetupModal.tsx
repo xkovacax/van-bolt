@@ -1,37 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import { X, User as UserIcon, Camera, Car, PlusCircle } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { createUserProfile } from '../../services/userService';
 
-interface UserProfileSetupProps {
+interface ProfileSetupModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess: (user: any) => void;
   userData: {
     id: string;
     email: string;
     name: string;
     avatar?: string;
-  } | null;
+  };
   defaultRole?: 'owner' | 'customer';
 }
 
-const UserProfileSetup: React.FC<UserProfileSetupProps> = ({ 
+const ProfileSetupModal: React.FC<ProfileSetupModalProps> = ({ 
   isOpen, 
   onClose, 
+  onSuccess,
   userData, 
   defaultRole = 'customer' 
 }) => {
   const [formData, setFormData] = useState({
-    name: userData?.name || '',
+    name: userData.name || '',
     role: defaultRole
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { createUserProfile } = useAuth();
 
   // Update form data when userData or defaultRole changes
   useEffect(() => {
     setFormData({
-      name: userData?.name || '',
+      name: userData.name || '',
       role: defaultRole
     });
   }, [userData, defaultRole]);
@@ -49,25 +50,10 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({
     };
   }, [isOpen]);
 
-  // Enhanced logging
-  React.useEffect(() => {
-    console.log('🎯 UserProfileSetup render:', {
-      isOpen,
-      hasUserData: !!userData,
-      userName: userData?.name,
-      userEmail: userData?.email,
-      defaultRole,
-      currentRole: formData.role
-    });
-  }, [isOpen, userData, defaultRole, formData.role]);
-
-  // Don't render if not open or no userData
-  if (!isOpen || !userData) {
-    console.log('❌ UserProfileSetup not rendering:', { isOpen, hasUserData: !!userData });
+  // Don't render if not open
+  if (!isOpen) {
     return null;
   }
-
-  console.log('✅ UserProfileSetup IS RENDERING!');
 
   const generateAvatar = (name: string) => {
     const initials = name
@@ -102,23 +88,27 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({
     }
 
     try {
-      console.log('🔨 PROFILE SETUP: Submitting with role:', formData.role);
+      console.log('🔨 ProfileSetupModal: Submitting with role:', formData.role);
       
-      const { error: profileError } = await createUserProfile({
+      const { user, error: serviceError } = await createUserProfile({
+        id: userData.id,
         name: formData.name.trim(),
+        email: userData.email,
         role: formData.role
       });
 
-      if (profileError) {
-        console.error('❌ Profile creation error:', profileError);
-        setError('Chyba pri vytváraní profilu. Skúste to znovu.');
+      if (serviceError) {
+        console.error('❌ ProfileSetupModal: Service error:', serviceError);
+        setError(serviceError);
         return;
       }
 
-      console.log('✅ Profile created successfully with role:', formData.role);
-      // Don't call onClose here - let the auth context handle the state change
+      if (user) {
+        console.log('✅ ProfileSetupModal: Profile created successfully:', user);
+        onSuccess(user);
+      }
     } catch (error) {
-      console.error('❌ Profile setup error:', error);
+      console.error('❌ ProfileSetupModal: Unexpected error:', error);
       setError('Nastala neočakávaná chyba. Skúste to znovu.');
     } finally {
       setIsLoading(false);
@@ -133,7 +123,7 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({
   };
 
   const handleRoleChange = (role: 'owner' | 'customer') => {
-    console.log('🎯 PROFILE SETUP: Role changed to:', role);
+    console.log('🎯 ProfileSetupModal: Role changed to:', role);
     setFormData({
       ...formData,
       role
@@ -145,7 +135,7 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[100]">
       <div className="bg-white rounded-2xl max-w-md w-full p-6 relative shadow-2xl">
-        {/* Header with enhanced visibility */}
+        {/* Header */}
         <div className="text-center mb-6">
           <div className="w-16 h-16 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
             <span className="text-white font-bold text-xl">MC</span>
@@ -214,7 +204,7 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({
             </div>
           </div>
 
-          {/* Role Selection with Radio Button Design */}
+          {/* Role Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
               Chcem *
@@ -334,7 +324,7 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({
         {/* Development debug info */}
         {process.env.NODE_ENV === 'development' && (
           <div className="mt-4 p-2 bg-gray-100 rounded text-xs">
-            <div className="font-bold">Profile Setup Debug:</div>
+            <div className="font-bold">ProfileSetupModal Debug:</div>
             <div>User ID: {userData.id}</div>
             <div>Email: {userData.email}</div>
             <div>Name: {userData.name}</div>
@@ -348,4 +338,4 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({
   );
 };
 
-export default UserProfileSetup;
+export default ProfileSetupModal;

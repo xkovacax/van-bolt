@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useRe
 import { User as SupabaseUser, Session, AuthError } from '@supabase/supabase-js';
 import { supabase, getRedirectUrl } from '../lib/supabase';
 import { User } from '../types';
+import { getUserProfile, hasAccessToken, getCurrentUserId, getUserMetadata } from '../services/userService';
 
 interface AuthContextType {
   user: User | null;
@@ -14,8 +15,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   register: (name: string, email: string, password: string, role: 'owner' | 'customer') => Promise<{ error: AuthError | null }>;
   isAuthenticated: boolean;
-  completePendingSetup: () => void;
-  createUserProfile: (userData: { name: string; role: 'owner' | 'customer' }) => Promise<{ error: any }>;
+  onProfileSetupComplete: (user: User) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -45,7 +45,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const authInitialized = useRef(false);
 
   useEffect(() => {
-    console.log('🚀 AuthProvider initializing...');
+    console.log('🚀 AuthProvider initializing with userService...');
     
     // 🚨 CRITICAL: Prevent multiple initializations
     if (authInitialized.current) {
@@ -54,31 +54,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
     authInitialized.current = true;
     
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      console.log('🔄 Initial session check:', { 
-        hasSession: !!session, 
-        userId: session?.user?.id,
-        error: error?.message 
-      });
-      
-      if (error) {
-        console.error('❌ Session error:', error);
-        setLoading(false);
-        return;
-      }
-      
-      setSession(session);
-      if (session?.user) {
-        handleUserSession(session.user);
-      } else {
-        console.log('✅ No session found, setting loading to false');
-        setLoading(false);
-      }
-    }).catch((error) => {
-      console.error('❌ Session check failed:', error);
-      setLoading(false);
-    });
+    // Initialize auth state
+    initializeAuth();
 
     // Listen for auth changes
     const {
@@ -98,7 +75,68 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       subscription.unsubscribe();
       authInitialized.current = false;
     };
-  }, []); // 🚨 CRITICAL: Empty dependency array to prevent re-runs
+  }, []); // 🚨 CRITICAL: Empty dependency array
+
+  const initializeAuth = async () => {
+    try {
+      console.log('🔍 Checking access token...');
+      
+      // 🎯 STEP 1: Synchronously check if access token exists
+      const hasToken = await hasAccessToken();
+      
+      if (!hasToken) {
+        console.log('❌ No access token found');
+        setLoading(false);
+        return;
+      }
+
+      console.log('✅ Access token found, getting user ID...');
+      
+      // 🎯 STEP 2: Get current user ID
+      const userId = await getCurrentUserId();
+      
+      if (!userId) {
+        console.log('❌ No user ID found');
+        setLoading(false);
+        return;
+      }
+
+      console.log('🔍 User ID found:', userId);
+      
+      // 🎯 STEP 3: Use userService to get user profile
+      const { user: userProfile, needsProfileSetup: needsSetup, error } = await getUserProfile(userId);
+      
+      if (error) {
+        console.error('❌ UserService error:', error);
+        setLoading(false);
+        return;
+      }
+
+      if (needsSetup) {
+        console.log('🎯 Profile setup needed, getting user metadata...');
+        
+        // Get user metadata for profile setup
+        const metadata = await getUserMetadata();
+        if (metadata) {
+          setPendingUserData(metadata);
+          setNeedsProfileSetup(true);
+        }
+        setLoading(false);
+      } else if (userProfile) {
+        console.log('✅ User profile loaded:', userProfile);
+        setUser(userProfile);
+        setLoading(false);
+      }
+
+      // Get session for context
+      const { data: { session } } = await supabase.auth.getSession();
+      setSession(session);
+
+    } catch (error) {
+      console.error('❌ Auth initialization error:', error);
+      setLoading(false);
+    }
+  };
 
   const resetAuthState = () => {
     console.log('🔄 Resetting auth state');
@@ -110,9 +148,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     lastProcessedUserId.current = null;
   };
 
-  // 🚨 CRITICAL FIX: SINGLE DATABASE QUERY WITH INFINITE LOOP PREVENTION
   const handleUserSession = async (supabaseUser: SupabaseUser) => {
-    console.log('👤 ===== STARTING handleUserSession (SINGLE QUERY) =====');
+    console.log('👤 ===== STARTING handleUserSession with userService =====');
     console.log('👤 User ID:', supabaseUser.id);
     
     // 🚨 CRITICAL: Prevent infinite loops
@@ -137,218 +174,66 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setLoading(true);
     
     try {
-      console.log('📊 STEP 1: SINGLE database query (ULTRA-FAST)...');
-      const queryStartTime = Date.now();
+      // 🎯 USE USERSERVICE: Single query approach
+      const { user: userProfile, needsProfileSetup: needsSetup, error } = await getUserProfile(supabaseUser.id);
       
-      // 🎯 SINGLE DATABASE QUERY - ULTRA OPTIMIZED
-      const { data: userProfile, error: dbError } = await supabase
-        .from('users')
-        .select('id, name, email, role, avatar, rating, review_count')
-        .eq('id', supabaseUser.id)
-        .limit(1)
-        .single(); // Use single() instead of maybeSingle() for better performance
-
-      const queryTime = Date.now() - queryStartTime;
-      console.log(`📊 Database query completed in ${queryTime}ms`);
-
-      // 🚨 STEP 2: HANDLE RESPONSE - NO FALLBACKS, PURE DATABASE DECISION
-      if (dbError) {
-        console.log('❌ Database error or no profile found:', {
-          code: dbError.code,
-          message: dbError.message,
-          queryTime: `${queryTime}ms`
-        });
-        
-        // Check if it's "no rows" error (user doesn't exist)
-        if (dbError.code === 'PGRST116' || dbError.message?.includes('no rows')) {
-          console.log('🎯 NO USER PROFILE: Showing profile setup modal');
-          
-          const pendingData = {
-            id: supabaseUser.id,
-            email: supabaseUser.email || '',
-            name: supabaseUser.user_metadata?.full_name || 
-                  supabaseUser.user_metadata?.name || 
-                  supabaseUser.email?.split('@')[0] || 'User',
-            avatar: supabaseUser.user_metadata?.avatar_url || 
-                    supabaseUser.user_metadata?.picture
-          };
-          
-          // Set modal state
-          setPendingUserData(pendingData);
-          setNeedsProfileSetup(true);
-          setUser(null);
-          setLoading(false);
-          
-          console.log('🎯 MODAL: Profile setup modal activated', {
-            needsSetup: true,
-            hasPendingData: true,
-            modalShouldShow: true,
-            reason: 'no_database_profile'
-          });
-        } else {
-          // Other database error - treat as connection issue
-          console.error('🚨 DATABASE CONNECTION ERROR:', dbError);
-          setLoading(false);
-        }
-        
+      if (error) {
+        console.error('❌ UserService error in handleUserSession:', error);
+        setLoading(false);
         isProcessingUser.current = false;
         return;
       }
 
-      if (userProfile) {
-        // ✅ USER EXISTS IN DATABASE - USE EXACT DATABASE DATA
-        console.log('✅ User profile found in database:', userProfile);
+      if (needsSetup) {
+        console.log('🎯 Profile setup needed from handleUserSession');
         
-        const userData = {
-          id: userProfile.id,
-          name: userProfile.name,
-          email: userProfile.email,
-          role: userProfile.role, // 🎯 CRITICAL: Use EXACT role from database
-          avatar: userProfile.avatar,
-          rating: userProfile.rating,
-          reviewCount: userProfile.review_count
+        const pendingData = {
+          id: supabaseUser.id,
+          email: supabaseUser.email || '',
+          name: supabaseUser.user_metadata?.full_name || 
+                supabaseUser.user_metadata?.name || 
+                supabaseUser.email?.split('@')[0] || 'User',
+          avatar: supabaseUser.user_metadata?.avatar_url || 
+                  supabaseUser.user_metadata?.picture
         };
         
-        console.log('🎯 Setting user with DATABASE role:', userData.role);
+        setPendingUserData(pendingData);
+        setNeedsProfileSetup(true);
+        setUser(null);
+        setLoading(false);
         
-        // IMMEDIATE state update with DATABASE data
-        setUser(userData);
+        console.log('🎯 MODAL: Profile setup modal activated');
+      } else if (userProfile) {
+        console.log('✅ User profile loaded from userService:', userProfile);
+        
+        setUser(userProfile);
         setNeedsProfileSetup(false);
         setPendingUserData(null);
         setLoading(false);
         
-        console.log('🎯 SUCCESS: User loaded from database', {
-          needsSetup: false,
-          hasPendingData: false,
-          modalShouldShow: false,
-          hasUser: true,
-          userName: userData.name,
-          userRole: userData.role,
-          source: 'database_only',
-          queryTime: `${queryTime}ms`
-        });
+        console.log('🎯 SUCCESS: User loaded with role:', userProfile.role);
       }
     } catch (error) {
-      console.error('❌ CRITICAL ERROR in database query:', error);
-      
-      // On any error, show profile setup modal
-      console.log('🎯 CRITICAL ERROR: Showing profile setup modal');
-      const pendingData = {
-        id: supabaseUser.id,
-        email: supabaseUser.email || '',
-        name: supabaseUser.email?.split('@')[0] || 'User',
-        avatar: null
-      };
-      
-      setPendingUserData(pendingData);
-      setNeedsProfileSetup(true);
-      setUser(null);
+      console.error('❌ CRITICAL ERROR in handleUserSession:', error);
       setLoading(false);
     } finally {
       // 🚨 CRITICAL: Always reset processing flag
       isProcessingUser.current = false;
     }
     
-    console.log('👤 ===== ENDING handleUserSession (SINGLE QUERY) =====');
+    console.log('👤 ===== ENDING handleUserSession =====');
   };
 
-  const createUserProfile = async (userData: { name: string; role: 'owner' | 'customer' }) => {
-    console.log('🔨 ===== STARTING createUserProfile (SINGLE INSERT) =====');
+  const onProfileSetupComplete = (newUser: User) => {
+    console.log('🎉 Profile setup completed:', newUser);
     
-    if (!pendingUserData) {
-      console.error('❌ No pending user data for profile creation');
-      return { error: 'No pending user data' };
-    }
-
-    try {
-      console.log('🔨 Creating user profile with data:', userData);
-      console.log('🎯 CRITICAL: Role being inserted:', userData.role);
-      
-      // Generate default avatar
-      const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name)}&size=150&background=059669&color=fff&bold=true`;
-
-      console.log('🔨 Inserting into database...');
-      const insertStartTime = Date.now();
-      
-      // 🎯 CRITICAL: Single insert with EXACT role specified by user
-      const { data: newUser, error: dbError } = await supabase
-        .from('users')
-        .insert([
-          {
-            id: pendingUserData.id,
-            name: userData.name.trim(),
-            email: pendingUserData.email,
-            role: userData.role, // 🎯 CRITICAL: Use EXACT role from form
-            avatar: avatarUrl,
-            rating: 5.0,
-            review_count: 0
-          }
-        ])
-        .select('id, name, email, role, avatar, rating, review_count')
-        .single();
-
-      const insertTime = Date.now() - insertStartTime;
-      console.log(`🔨 Insert completed in ${insertTime}ms`);
-
-      if (dbError) {
-        console.error('❌ Database insert error:', dbError);
-        return { error: dbError };
-      }
-
-      console.log('✅ User profile created successfully:', newUser);
-      console.log('🎯 CRITICAL: Database returned role:', newUser.role);
-
-      // 🎯 CRITICAL: Verify the role was saved correctly
-      if (newUser.role !== userData.role) {
-        console.error('🚨 CRITICAL ERROR: Role mismatch!', {
-          expected: userData.role,
-          actual: newUser.role
-        });
-      } else {
-        console.log('✅ Role saved correctly in database:', newUser.role);
-      }
-
-      // 🎯 CRITICAL: Set user state with EXACT database data
-      console.log('🔨 Setting user state with EXACT database data...');
-      const userFromDb = {
-        id: newUser.id,
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role, // 🎯 CRITICAL: Use EXACT role from database
-        avatar: newUser.avatar,
-        rating: newUser.rating,
-        reviewCount: newUser.review_count
-      };
-      
-      console.log('🎯 FINAL: Setting user with role:', userFromDb.role);
-      setUser(userFromDb);
-
-      // Clear pending setup
-      console.log('🔨 Clearing pending setup state...');
-      setNeedsProfileSetup(false);
-      setPendingUserData(null);
-
-      // Update processing flags
-      lastProcessedUserId.current = newUser.id;
-
-      console.log('🎯 SUCCESS: Profile created successfully', {
-        needsSetup: false,
-        hasPendingData: false,
-        modalShouldShow: false,
-        hasUser: true,
-        userName: userFromDb.name,
-        userRole: userFromDb.role,
-        source: 'database_insert'
-      });
-
-      console.log('🎉 Profile setup completed successfully');
-      console.log('🔨 ===== ENDING createUserProfile =====');
-      return { error: null };
-    } catch (error) {
-      console.error('❌ Profile creation error:', error);
-      console.log('🔨 ===== ENDING createUserProfile (ERROR) =====');
-      return { error };
-    }
+    // Update state with new user
+    setUser(newUser);
+    setNeedsProfileSetup(false);
+    setPendingUserData(null);
+    
+    // Update processing flags
+    lastProcessedUserId.current = newUser.id;
   };
 
   const login = async (email: string, password: string) => {
@@ -409,45 +294,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return { error };
     }
 
-    // If user is created, create user profile immediately
-    if (data.user) {
-      try {
-        console.log('📝 REGISTER: Creating database profile with role:', role);
-        
-        const { error: userError } = await supabase
-          .from('users')
-          .insert([
-            {
-              id: data.user.id,
-              name: name || 'User',
-              email: email || '',
-              role, // 🎯 CRITICAL: Use exact role from registration
-              avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&size=150&background=059669&color=fff&bold=true`,
-              rating: 5.0,
-              review_count: 0
-            }
-          ]);
-
-        if (userError) {
-          console.error('❌ Error creating user profile during registration:', userError);
-        } else {
-          console.log('✅ User profile created during registration with role:', role);
-        }
-      } catch (error) {
-        console.error('❌ Profile creation error during registration:', error);
-      }
-    }
-
+    // Note: Profile creation will be handled by the profile setup modal
+    // after redirect, not here
     setLoading(false);
     return { error };
-  };
-
-  const completePendingSetup = () => {
-    console.log('❌ Cancelling profile setup');
-    setNeedsProfileSetup(false);
-    setPendingUserData(null);
-    isProcessingUser.current = false;
-    lastProcessedUserId.current = null;
   };
 
   const value = {
@@ -461,8 +311,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     logout,
     register,
     isAuthenticated: !!session,
-    completePendingSetup,
-    createUserProfile
+    onProfileSetupComplete
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

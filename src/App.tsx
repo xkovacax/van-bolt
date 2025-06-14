@@ -8,7 +8,7 @@ import CamperModal from './components/Campers/CamperModal';
 import FilterSidebar from './components/Filters/FilterSidebar';
 import AuthModal from './components/Auth/AuthModal';
 import AuthCallback from './components/Auth/AuthCallback';
-import UserProfileSetup from './components/Auth/UserProfileSetup';
+import ProfileSetupModal from './components/Auth/ProfileSetupModal';
 import { mockCampers } from './data/mockData';
 import { Camper } from './types';
 import { SlidersHorizontal } from 'lucide-react';
@@ -37,7 +37,7 @@ const AppContent: React.FC = () => {
     features: []
   });
 
-  const { needsProfileSetup, pendingUserData, loading, isAuthenticated } = useAuth();
+  const { needsProfileSetup, pendingUserData, loading, isAuthenticated, onProfileSetupComplete } = useAuth();
 
   // Enhanced logging for modal visibility
   React.useEffect(() => {
@@ -142,9 +142,10 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const handleProfileSetupClose = () => {
-    // Don't allow closing without completing setup
-    console.log('⚠️ Profile setup cannot be closed without completion');
+  // Handle profile setup completion
+  const handleProfileSetupSuccess = (user: any) => {
+    console.log('🎉 App: Profile setup completed successfully:', user);
+    onProfileSetupComplete(user);
   };
 
   // Show modal conditions
@@ -232,13 +233,14 @@ const AppContent: React.FC = () => {
         defaultMode={authModalDefaultMode} // Pass the mode to control login/register
       />
 
-      {/* User Profile Setup Modal - ENHANCED VISIBILITY */}
-      {shouldShowProfileModal && (
+      {/* 🎯 NEW: Reusable Profile Setup Modal */}
+      {shouldShowProfileModal && pendingUserData && (
         <>
           {console.log('🚨 RENDERING PROFILE SETUP MODAL!')}
-          <UserProfileSetup
+          <ProfileSetupModal
             isOpen={true}
-            onClose={handleProfileSetupClose}
+            onClose={() => {}} // Don't allow closing without completion
+            onSuccess={handleProfileSetupSuccess}
             userData={pendingUserData}
             defaultRole={pendingUserData?.preferredRole || 'customer'}
           />
