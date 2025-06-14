@@ -96,25 +96,24 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-4">
-            {/* Role-based buttons for authenticated users */}
+            {/* Show "Prenajať Campervany" for unauthenticated users OR customers (not owners) */}
+            {(!isAuthenticated || (user && user.role === 'customer')) && (
+              <button className="flex items-center space-x-1 px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 transition-colors rounded-lg">
+                <Car className="h-4 w-4" />
+                <span>Prenajať Campervany</span>
+              </button>
+            )}
+
+            {/* Show "Pridať Campervan" for unauthenticated users OR owners */}
+            {(!isAuthenticated || (user && user.role === 'owner')) && (
+              <button className="flex items-center space-x-1 px-4 py-2 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors rounded-lg">
+                <PlusCircle className="h-4 w-4" />
+                <span>Pridať Campervan</span>
+              </button>
+            )}
+
             {isAuthenticated && user ? (
               <>
-                {/* Show "Prenajať Campervany" only for customers (not owners) */}
-                {user.role === 'customer' && (
-                  <button className="flex items-center space-x-1 px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 transition-colors rounded-lg">
-                    <Car className="h-4 w-4" />
-                    <span>Prenajať Campervany</span>
-                  </button>
-                )}
-
-                {/* Show "Pridať Campervan" only for owners */}
-                {user.role === 'owner' && (
-                  <button className="flex items-center space-x-1 px-4 py-2 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors rounded-lg">
-                    <PlusCircle className="h-4 w-4" />
-                    <span>Pridať Campervan</span>
-                  </button>
-                )}
-
                 <button className="flex items-center space-x-1 px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
                   <Heart className="h-4 w-4" />
                   <span>Obľúbené</span>
@@ -167,25 +166,12 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
                 </div>
               </>
             ) : (
-              <>
-                {/* Show both buttons for non-authenticated users */}
-                <button className="flex items-center space-x-1 px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 transition-colors rounded-lg">
-                  <Car className="h-4 w-4" />
-                  <span>Prenajať Campervany</span>
-                </button>
-
-                <button className="flex items-center space-x-1 px-3 py-2 text-sm font-medium text-orange-600 hover:text-orange-700 transition-colors border border-orange-200 rounded-lg hover:bg-orange-50">
-                  <PlusCircle className="h-4 w-4" />
-                  <span>Pridať Campervan</span>
-                </button>
-
-                <button
-                  onClick={onAuthClick}
-                  className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
-                >
-                  Prihlásiť sa
-                </button>
-              </>
+              <button
+                onClick={onAuthClick}
+                className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
+              >
+                Prihlásiť sa
+              </button>
             )}
           </div>
 
@@ -285,7 +271,7 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick }) => {
                     <span>Prenajať Campervany</span>
                   </button>
 
-                  <button className="flex items-center space-x-2 w-full px-3 py-2 text-sm font-medium text-orange-600 hover:text-orange-700 transition-colors border border-orange-200 rounded-lg hover:bg-orange-50">
+                  <button className="flex items-center space-x-2 w-full px-3 py-3 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors rounded-lg">
                     <PlusCircle className="h-4 w-4" />
                     <span>Pridať Campervan</span>
                   </button>
