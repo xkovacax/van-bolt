@@ -98,16 +98,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('👤 User ID:', supabaseUser.id);
     console.log('👤 User email:', supabaseUser.email);
     
-    // CRITICAL: Reset modal state immediately to prevent flashing
-    setNeedsProfileSetup(false);
-    setPendingUserData(null);
-    
     try {
-      console.log('📊 STEP 1: Quick user profile check...');
+      console.log('📊 STEP 1: Checking user profile in database...');
       
       const queryStartTime = Date.now();
       
-      // Simple query without timeout
+      // Simple direct query without timeout or race conditions
       const { data: userProfile, error: dbError } = await supabase
         .from('users')
         .select('id, name, email, role, avatar, rating, review_count')
@@ -115,9 +111,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         .maybeSingle();
 
       const queryTime = Date.now() - queryStartTime;
-      console.log(`📊 Query completed in ${queryTime}ms`);
+      console.log(`📊 Database query completed in ${queryTime}ms`);
 
-      // STEP 2: Handle database response
+      // Handle database errors
       if (dbError) {
         console.log('❌ Database error:', {
           code: dbError.code,
@@ -125,30 +121,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           queryTime: `${queryTime}ms`
         });
         
-        // Only setup profile if it's a real "not found" error
-        if (dbError.code === 'PGRST116' || dbError.message?.includes('not found')) {
-          console.log('🎯 User not found - setting up profile creation');
+        // Check if it's a "not found" type error
+        if (dbError.code === 'PGRST116' || dbError.message?.includes('not found') || dbError.message?.includes('no rows')) {
+          console.log('🎯 User profile not found - needs setup');
           setupPendingProfile(supabaseUser);
         } else {
-          console.log('⚠️ Database error but not "not found" - assuming user exists');
-          // Fallback: create basic user object
-          setUser({
-            id: supabaseUser.id,
-            name: supabaseUser.user_metadata?.full_name || 'User',
-            email: supabaseUser.email || '',
-            role: 'customer',
-            avatar: supabaseUser.user_metadata?.avatar_url
-          });
-          setLoading(false);
+          // Other database errors - create fallback user to prevent modal flash
+          console.log('⚠️ Database error but not "not found" - creating fallback user');
+          createFallbackUser(supabaseUser);
         }
         return;
       }
 
-      // STEP 3: Check if user profile exists
+      // Check if user profile exists
       if (userProfile) {
         console.log(`✅ User profile found in ${queryTime}ms`);
         
-        // CRITICAL: Set user immediately and ensure modal state is cleared
+        // Set user and ensure modal state is cleared
         setUser({
           id: userProfile.id,
           name: userProfile.name || 'User',
@@ -159,12 +148,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           reviewCount: userProfile.review_count
         });
         
-        // Ensure modal state is completely cleared
+        // Clear any pending modal state
         setNeedsProfileSetup(false);
         setPendingUserData(null);
         setLoading(false);
         
-        console.log('✅ User state updated successfully - modal should NOT show');
+        console.log('✅ User state updated - modal should NOT show');
       } else {
         // No profile found - need profile setup
         console.log(`🎯 No profile found in ${queryTime}ms - triggering setup modal`);
@@ -173,21 +162,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('❌ CRITICAL ERROR in handleUserSession:', error);
       
-      // If there's a critical error, assume user exists to prevent modal flashing
-      console.log('🎯 CRITICAL ERROR FALLBACK: Assuming user exists to prevent modal flash');
-      setUser({
-        id: supabaseUser.id,
-        name: supabaseUser.user_metadata?.full_name || 'User',
-        email: supabaseUser.email || '',
-        role: 'customer',
-        avatar: supabaseUser.user_metadata?.avatar_url
-      });
-      setNeedsProfileSetup(false);
-      setPendingUserData(null);
-      setLoading(false);
+      // On critical error, create fallback user to prevent modal flash
+      console.log('🎯 CRITICAL ERROR FALLBACK: Creating fallback user');
+      createFallbackUser(supabaseUser);
     }
     
     console.log('👤 ===== ENDING handleUserSession =====');
+  };
+
+  // Helper function to create fallback user (prevents modal flash on errors)
+  const createFallbackUser = (supabaseUser: SupabaseUser) => {
+    console.log('🔧 Creating fallback user to prevent modal flash');
+    setUser({
+      id: supabaseUser.id,
+      name: supabaseUser.user_metadata?.full_name || 
+            supabaseUser.user_metadata?.name || 
+            supabaseUser.email?.split('@')[0] || 'User',
+      email: supabaseUser.email || '',
+      role: 'customer',
+      avatar: supabaseUser.user_metadata?.avatar_url || 
+              supabaseUser.user_metadata?.picture
+    });
+    setNeedsProfileSetup(false);
+    setPendingUserData(null);
+    setLoading(false);
   };
 
   // Helper function to setup pending profile
@@ -204,7 +202,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     
     console.log('📝 Setting up pending profile:', userData);
     
-    // CRITICAL: Only set these if we're sure the user needs setup
+    // Set modal state
     setPendingUserData(userData);
     setNeedsProfileSetup(true);
     setUser(null);
