@@ -32,6 +32,52 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+// Helper function to get preferred role from localStorage with expiry check
+const getPreferredRole = (): 'owner' | 'customer' | null => {
+  try {
+    const storedData = localStorage.getItem('preferredRole');
+    if (!storedData) {
+      return null;
+    }
+
+    const { role, expiry } = JSON.parse(storedData);
+    
+    // Check if the stored preference has expired (10 minutes)
+    if (Date.now() > expiry) {
+      console.log('🕒 Preferred role expired, removing from localStorage');
+      localStorage.removeItem('preferredRole');
+      return null;
+    }
+
+    console.log('🎯 Found valid preferred role from localStorage:', { 
+      role, 
+      expiresIn: Math.round((expiry - Date.now()) / 1000 / 60) + ' minutes' 
+    });
+    return role;
+  } catch (error) {
+    console.error('❌ Error reading preferred role from localStorage:', error);
+    localStorage.removeItem('preferredRole'); // Clean up corrupted data
+    return null;
+  }
+};
+
+// Helper function to clean up expired preferred role
+const cleanupExpiredPreferredRole = () => {
+  try {
+    const storedData = localStorage.getItem('preferredRole');
+    if (storedData) {
+      const { expiry } = JSON.parse(storedData);
+      if (Date.now() > expiry) {
+        console.log('🧹 Cleaning up expired preferred role');
+        localStorage.removeItem('preferredRole');
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error cleaning up preferred role:', error);
+    localStorage.removeItem('preferredRole');
+  }
+};
+
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -41,6 +87,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     console.log('🚀 AuthProvider initializing...');
+    
+    // Clean up any expired preferred roles on startup
+    cleanupExpiredPreferredRole();
     
     // Get initial session
     supabase.auth.getSession().then(({ data: { session }, error }) => {
@@ -104,10 +153,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const queryStartTime = Date.now();
       
       // Check for preferred role from localStorage (Google OAuth flow)
-      const preferredRole = localStorage.getItem('preferredRole');
+      const preferredRole = getPreferredRole();
       if (preferredRole) {
         console.log('🎯 Found preferred role from localStorage:', preferredRole);
-        localStorage.removeItem('preferredRole'); // Clean up
+        // Clean up after reading (we'll use it once)
+        localStorage.removeItem('preferredRole');
       }
       
       // ULTRA-FAST QUERY: Reduced timeout to 3 seconds and optimized query
@@ -471,6 +521,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = async () => {
     console.log('👋 Logging out user');
     setLoading(true);
+    
+    // Clean up any stored preferred role on logout
+    localStorage.removeItem('preferredRole');
+    
     await supabase.auth.signOut();
     resetAuthState();
   };

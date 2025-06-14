@@ -55,6 +55,17 @@ const AuthModal: React.FC<AuthModalProps> = ({
     };
   }, [isOpen]);
 
+  // Helper function to store preferred role with expiry
+  const storePreferredRole = (role: 'owner' | 'customer') => {
+    const expiryTime = Date.now() + (10 * 60 * 1000); // 10 minutes from now
+    const preferredRoleData = {
+      role,
+      expiry: expiryTime
+    };
+    localStorage.setItem('preferredRole', JSON.stringify(preferredRoleData));
+    console.log('🎯 Stored preferred role with 10-minute expiry:', { role, expiryTime: new Date(expiryTime) });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -93,6 +104,10 @@ const AuthModal: React.FC<AuthModalProps> = ({
       if (isLogin) {
         result = await login(formData.email, formData.password);
       } else {
+        // Store preferred role for regular registration
+        if (formData.role === 'owner') {
+          storePreferredRole('owner');
+        }
         result = await register(formData.name, formData.email, formData.password, formData.role);
       }
       
@@ -111,9 +126,10 @@ const AuthModal: React.FC<AuthModalProps> = ({
   const handleGoogleLogin = async () => {
     setError(null);
     
-    // Store preferred role in localStorage for Google OAuth flow
+    // Store preferred role in localStorage for Google OAuth flow with 10-minute expiry
     if (!isLogin && defaultRole === 'owner') {
-      localStorage.setItem('preferredRole', 'owner');
+      storePreferredRole('owner');
+      console.log('🔗 Google OAuth: Stored owner preference for 10 minutes');
     }
     
     const { error } = await loginWithGoogle();
