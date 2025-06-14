@@ -113,6 +113,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const queryTime = Date.now() - queryStartTime;
       console.log(`📊 Database query completed in ${queryTime}ms`);
 
+      // SYNCHRONOUS MODAL RENDER CHECK - AFTER QUERY COMPLETION
+      console.log('🎯 ===== MODAL RENDER CHECK (SYNCHRONOUS AFTER QUERY) =====');
+      
       // Handle database errors
       if (dbError) {
         console.log('❌ Database error:', {
@@ -124,11 +127,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Check if it's a "not found" type error
         if (dbError.code === 'PGRST116' || dbError.message?.includes('not found') || dbError.message?.includes('no rows')) {
           console.log('🎯 User profile not found - needs setup');
-          setupPendingProfile(supabaseUser);
+          const pendingData = setupPendingProfile(supabaseUser);
+          
+          // SYNCHRONOUS CHECK AFTER SETTING PENDING DATA
+          console.log('🎯 MODAL CHECK: Profile setup needed', {
+            needsSetup: true,
+            hasPendingData: !!pendingData,
+            modalShouldShow: true,
+            timestamp: new Date().toISOString()
+          });
         } else {
           // Other database errors - create fallback user to prevent modal flash
           console.log('⚠️ Database error but not "not found" - creating fallback user');
           createFallbackUser(supabaseUser);
+          
+          // SYNCHRONOUS CHECK AFTER CREATING FALLBACK
+          console.log('🎯 MODAL CHECK: Fallback user created', {
+            needsSetup: false,
+            hasPendingData: false,
+            modalShouldShow: false,
+            timestamp: new Date().toISOString()
+          });
         }
         return;
       }
@@ -153,11 +172,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setPendingUserData(null);
         setLoading(false);
         
-        console.log('✅ User state updated - modal should NOT show');
+        // SYNCHRONOUS CHECK AFTER SETTING USER
+        console.log('🎯 MODAL CHECK: User profile loaded', {
+          needsSetup: false,
+          hasPendingData: false,
+          modalShouldShow: false,
+          hasUser: true,
+          userName: userProfile.name,
+          timestamp: new Date().toISOString()
+        });
       } else {
         // No profile found - need profile setup
         console.log(`🎯 No profile found in ${queryTime}ms - triggering setup modal`);
-        setupPendingProfile(supabaseUser);
+        const pendingData = setupPendingProfile(supabaseUser);
+        
+        // SYNCHRONOUS CHECK AFTER SETTING UP PROFILE
+        console.log('🎯 MODAL CHECK: No profile found, setup needed', {
+          needsSetup: true,
+          hasPendingData: !!pendingData,
+          modalShouldShow: true,
+          timestamp: new Date().toISOString()
+        });
       }
     } catch (error) {
       console.error('❌ CRITICAL ERROR in handleUserSession:', error);
@@ -165,6 +200,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // On critical error, create fallback user to prevent modal flash
       console.log('🎯 CRITICAL ERROR FALLBACK: Creating fallback user');
       createFallbackUser(supabaseUser);
+      
+      // SYNCHRONOUS CHECK AFTER CRITICAL ERROR
+      console.log('🎯 MODAL CHECK: Critical error, fallback created', {
+        needsSetup: false,
+        hasPendingData: false,
+        modalShouldShow: false,
+        timestamp: new Date().toISOString()
+      });
     }
     
     console.log('👤 ===== ENDING handleUserSession =====');
@@ -188,7 +231,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setLoading(false);
   };
 
-  // Helper function to setup pending profile
+  // Helper function to setup pending profile - RETURNS PENDING DATA FOR SYNC CHECK
   const setupPendingProfile = (supabaseUser: SupabaseUser) => {
     const userData = {
       id: supabaseUser.id,
@@ -209,6 +252,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setLoading(false);
     
     console.log('🎯 Profile setup modal should now show');
+    
+    // Return userData for synchronous checking
+    return userData;
   };
 
   const createUserProfile = async (userData: { name: string; role: 'owner' | 'customer' }) => {
@@ -287,6 +333,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log('🔨 Clearing pending setup state...');
       setNeedsProfileSetup(false);
       setPendingUserData(null);
+
+      // SYNCHRONOUS CHECK AFTER PROFILE CREATION
+      console.log('🎯 MODAL CHECK: Profile created successfully', {
+        needsSetup: false,
+        hasPendingData: false,
+        modalShouldShow: false,
+        hasUser: true,
+        userName: newUser.name,
+        timestamp: new Date().toISOString()
+      });
 
       console.log('🎉 Profile setup completed successfully');
       console.log('🔨 ===== ENDING createUserProfile =====');
@@ -385,21 +441,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setPendingUserData(null);
   };
 
-  // Enhanced debug logging with modal state tracking
-  useEffect(() => {
-    const shouldShowModal = needsProfileSetup && pendingUserData && !loading;
-    console.log('🔍 AUTH STATE:', {
-      hasUser: !!user,
-      userName: user?.name,
-      hasSession: !!session,
-      sessionUserId: session?.user?.id,
-      loading,
-      needsProfileSetup,
-      hasPendingData: !!pendingUserData,
-      modalShouldShow: shouldShowModal,
-      timestamp: new Date().toISOString()
-    });
-  }, [user, session, loading, needsProfileSetup, pendingUserData]);
+  // REMOVED ASYNC useEffect - Modal checks are now synchronous in handleUserSession
+  // This prevents race conditions and ensures modal state is checked after query completion
 
   const value = {
     user,
