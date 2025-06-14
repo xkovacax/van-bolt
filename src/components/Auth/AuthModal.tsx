@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Eye, EyeOff, Mail, Lock, User as UserIcon, Car, PlusCircle } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAppDispatch, useAppSelector } from '../../hooks/redux';
+import { login, loginWithGoogle, register, clearError } from '../../store/slices/authSlice';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -15,6 +16,9 @@ const AuthModal: React.FC<AuthModalProps> = ({
   defaultRole = 'customer',
   defaultMode = 'login'
 }) => {
+  const dispatch = useAppDispatch();
+  const { loading, error } = useAppSelector((state) => state.auth);
+  
   const [isLogin, setIsLogin] = useState(defaultMode === 'login');
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -23,8 +27,6 @@ const AuthModal: React.FC<AuthModalProps> = ({
     password: '',
     role: defaultRole
   });
-  const [error, setError] = useState<string | null>(null);
-  const { login, register, loginWithGoogle, loading } = useAuth();
 
   // Update role when defaultRole prop changes
   useEffect(() => {
@@ -38,6 +40,13 @@ const AuthModal: React.FC<AuthModalProps> = ({
   useEffect(() => {
     setIsLogin(defaultMode === 'login');
   }, [defaultMode]);
+
+  // Clear error when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      dispatch(clearError());
+    }
+  }, [isOpen, dispatch]);
 
   // Disable/enable body scroll when modal opens/closes
   useEffect(() => {
@@ -54,65 +63,56 @@ const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     
     // Validate required fields
     if (!isLogin) {
       if (!formData.name.trim()) {
-        setError('Meno je povinné');
         return;
       }
       if (!formData.email.trim()) {
-        setError('E-mail je povinný');
         return;
       }
       if (!formData.password.trim()) {
-        setError('Heslo je povinné');
         return;
       }
       if (formData.password.length < 6) {
-        setError('Heslo musí mať aspoň 6 znakov');
         return;
       }
     } else {
       if (!formData.email.trim()) {
-        setError('E-mail je povinný');
         return;
       }
       if (!formData.password.trim()) {
-        setError('Heslo je povinné');
         return;
       }
     }
     
     try {
-      let result;
       if (isLogin) {
-        result = await login(formData.email, formData.password);
+        await dispatch(login({ email: formData.email, password: formData.password })).unwrap();
       } else {
-        console.log('📝 AUTH MODAL: Registering with role:', formData.role);
-        result = await register(formData.name, formData.email, formData.password, formData.role);
+        await dispatch(register({ 
+          name: formData.name, 
+          email: formData.email, 
+          password: formData.password, 
+          role: formData.role 
+        })).unwrap();
       }
       
-      if (result.error) {
-        setError(result.error.message);
-      } else {
-        onClose();
-        setFormData({ name: '', email: '', password: '', role: defaultRole });
-      }
+      onClose();
+      setFormData({ name: '', email: '', password: '', role: defaultRole });
     } catch (error) {
+      // Error is handled by Redux
       console.error('Authentication error:', error);
-      setError('An unexpected error occurred. Please try again.');
     }
   };
 
   const handleGoogleLogin = async () => {
-    setError(null);
-    console.log('🔗 AUTH MODAL: Google OAuth login');
-    
-    const { error } = await loginWithGoogle();
-    if (error) {
-      setError(error.message);
+    try {
+      await dispatch(loginWithGoogle()).unwrap();
+    } catch (error) {
+      // Error is handled by Redux
+      console.error('Google login error:', error);
     }
   };
 
@@ -124,7 +124,6 @@ const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   const handleRoleChange = (role: 'owner' | 'customer') => {
-    console.log('🎯 AUTH MODAL: Role changed to:', role);
     setFormData({
       ...formData,
       role
@@ -133,7 +132,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleModalSwitch = () => {
     setIsLogin(!isLogin);
-    setError(null);
+    dispatch(clearError());
     setFormData({ name: '', email: '', password: '', role: defaultRole });
   };
 
@@ -406,17 +405,6 @@ const AuthModal: React.FC<AuthModalProps> = ({
             <a href="#" className="text-emerald-600 hover:text-emerald-700">Podmienkami používania</a>
             {' '}a{' '}
             <a href="#" className="text-emerald-600 hover:text-emerald-700">Zásadami ochrany súkromia</a>
-          </div>
-        )}
-
-        {/* Debug info in development */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mt-4 p-2 bg-gray-100 rounded text-xs">
-            <div className="font-bold">Auth Modal Debug:</div>
-            <div>Mode: {isLogin ? 'Login' : 'Register'}</div>
-            <div>Default Role: {defaultRole}</div>
-            <div>Current Role: {formData.role}</div>
-            <div>Default Mode: {defaultMode}</div>
           </div>
         )}
       </div>

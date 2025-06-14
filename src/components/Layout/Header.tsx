@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Search, Menu, X, User, LogOut, PlusCircle, Heart, Calendar, Car, Settings } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAppSelector, useAppDispatch } from '../../hooks/redux';
+import { logout } from '../../store/slices/authSlice';
+import { setSearchQuery } from '../../store/slices/campersSlice';
 
 interface HeaderProps {
   onSearch?: (query: string) => void;
@@ -9,10 +11,18 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick, onAddCampervanClick }) => {
+  const dispatch = useAppDispatch();
+  const { user, loading, isAuthenticated } = useAppSelector((state) => state.auth);
+  const { searchQuery } = useAppSelector((state) => state.campers);
+  
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const { user, logout, isAuthenticated, loading } = useAuth();
+  const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Sync local search with Redux state
+  useEffect(() => {
+    setLocalSearchQuery(searchQuery);
+  }, [searchQuery]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -33,11 +43,12 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick, onAddCampervanCl
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    onSearch?.(searchQuery);
+    dispatch(setSearchQuery(localSearchQuery));
+    onSearch?.(localSearchQuery);
   };
 
   const handleLogout = async () => {
-    await logout();
+    dispatch(logout());
     setIsMenuOpen(false);
   };
 
@@ -65,8 +76,8 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick, onAddCampervanCl
                 </div>
                 <input
                   type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  value={localSearchQuery}
+                  onChange={(e) => setLocalSearchQuery(e.target.value)}
                   placeholder="Hľadať campervany podľa lokality..."
                   className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                 />
@@ -105,8 +116,8 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick, onAddCampervanCl
               </div>
               <input
                 type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={localSearchQuery}
+                onChange={(e) => setLocalSearchQuery(e.target.value)}
                 placeholder="Hľadať campervany podľa lokality..."
                 className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
@@ -232,8 +243,8 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onAuthClick, onAddCampervanCl
                 </div>
                 <input
                   type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  value={localSearchQuery}
+                  onChange={(e) => setLocalSearchQuery(e.target.value)}
                   placeholder="Hľadať campervany..."
                   className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                 />
