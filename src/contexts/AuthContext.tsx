@@ -61,32 +61,6 @@ const getPreferredRole = (): 'owner' | 'customer' | null => {
   }
 };
 
-// Helper function to check if profile was just created (prevents modal re-showing)
-const wasProfileJustCreated = (): boolean => {
-  try {
-    const storedData = localStorage.getItem('profileJustCreated');
-    if (!storedData) {
-      return false;
-    }
-
-    const { created, expiry } = JSON.parse(storedData);
-    
-    // Check if the flag has expired (2 minutes)
-    if (Date.now() > expiry) {
-      console.log('🕒 Profile creation flag expired, removing from localStorage');
-      localStorage.removeItem('profileJustCreated');
-      return false;
-    }
-
-    console.log('🔒 Profile was just created, preventing modal for:', Math.round((expiry - Date.now()) / 1000) + ' seconds');
-    return created;
-  } catch (error) {
-    console.error('❌ Error reading profile creation flag from localStorage:', error);
-    localStorage.removeItem('profileJustCreated');
-    return false;
-  }
-};
-
 // Helper function to set profile creation flag
 const setProfileJustCreated = () => {
   const expiryTime = Date.now() + (2 * 60 * 1000); // 2 minutes from now
@@ -191,43 +165,57 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setLoading(false);
   };
 
-  // OPTIMIZED: Separate function to fetch user profile from database
-  const fetchUserProfile = async (userId: string): Promise<User | null> => {
-    console.log('📊 Fetching user profile from database for:', userId);
+  // 🚨 CRITICAL FIX: SINGLE REQUEST FUNCTION - NO MODAL FLASHING
+  const handleUserSession = async (supabaseUser: SupabaseUser) => {
+    console.log('👤 ===== STARTING handleUserSession (SINGLE REQUEST) =====');
+    console.log('👤 User ID:', supabaseUser.id);
+    
+    // 🚨 STEP 1: IMMEDIATE STATE RESET TO PREVENT MODAL FLASH
+    console.log('⚡ IMMEDIATE: Preventing modal flash');
+    setNeedsProfileSetup(false);
+    setPendingUserData(null);
+    setLoading(true); // Keep loading until we know for sure
     
     try {
+      console.log('📊 STEP 2: SINGLE database query with 1.5s timeout...');
       const queryStartTime = Date.now();
       
-      const queryPromise = supabase
+      // 🎯 SINGLE OPTIMIZED QUERY - NO MULTIPLE REQUESTS
+      const singleQueryPromise = supabase
         .from('users')
         .select('id, name, email, role, avatar, rating, review_count')
-        .eq('id', userId)
+        .eq('id', supabaseUser.id)
         .limit(1)
         .maybeSingle();
 
-      // 2 second timeout for faster response
+      // AGGRESSIVE 1.5 second timeout
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {
-          reject(new Error('Database query timeout (2s)'));
-        }, 2000);
+          reject(new Error('Single query timeout (1.5s)'));
+        }, 1500);
       });
 
       const { data: userProfile, error: dbError } = await Promise.race([
-        queryPromise,
+        singleQueryPromise,
         timeoutPromise
       ]) as any;
 
       const queryTime = Date.now() - queryStartTime;
-      console.log(`📊 Profile fetch completed in ${queryTime}ms`);
+      console.log(`📊 Single query completed in ${queryTime}ms`);
 
+      // 🚨 STEP 3: IMMEDIATE DECISION - NO DELAYS
       if (dbError) {
-        console.error('❌ Error fetching user profile:', dbError);
-        return null;
+        console.error('❌ Database error:', dbError);
+        // On error, create fallback user immediately - NO MODAL
+        createFallbackUser(supabaseUser);
+        return;
       }
 
       if (userProfile) {
-        console.log('✅ User profile fetched successfully:', userProfile);
-        return {
+        // ✅ USER EXISTS - SET IMMEDIATELY, NO MODAL
+        console.log('✅ User profile found - setting immediately');
+        
+        const userData = {
           id: userProfile.id,
           name: userProfile.name || 'User',
           email: userProfile.email || '',
@@ -236,125 +224,67 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           rating: userProfile.rating,
           reviewCount: userProfile.review_count
         };
-      }
-
-      return null;
-    } catch (error) {
-      console.error('❌ Error in fetchUserProfile:', error);
-      return null;
-    }
-  };
-
-  const handleUserSession = async (supabaseUser: SupabaseUser) => {
-    console.log('👤 ===== STARTING handleUserSession =====');
-    console.log('👤 User ID:', supabaseUser.id);
-    console.log('👤 User email:', supabaseUser.email);
-    
-    // 🚨 CRITICAL FIX: SYNCHRONOUS localStorage check FIRST to prevent modal flash
-    console.log('🔒 STEP 0: SYNCHRONOUS localStorage check...');
-    const profileJustCreated = wasProfileJustCreated();
-    
-    if (profileJustCreated) {
-      console.log('🚫 IMMEDIATE SKIP: Profile was just created (localStorage check)');
-      
-      // IMMEDIATE state update to prevent modal flash
-      console.log('⚡ Setting immediate loading state to prevent modal flash');
-      setNeedsProfileSetup(false);
-      setPendingUserData(null);
-      
-      // Fetch the fresh profile from database
-      const userProfile = await fetchUserProfile(supabaseUser.id);
-      if (userProfile) {
-        console.log('✅ Setting user from fresh profile after creation');
-        setUser(userProfile);
-        setLoading(false);
         
-        console.log('🎯 MODAL CHECK: Profile just created, user loaded immediately', {
-          needsSetup: false,
-          hasPendingData: false,
-          modalShouldShow: false,
-          hasUser: true,
-          userName: userProfile.name,
-          userRole: userProfile.role,
-          reason: 'just_created_profile_localStorage_immediate',
-          timestamp: new Date().toISOString()
-        });
-        
-        console.log('👤 ===== ENDING handleUserSession (IMMEDIATE SKIP) =====');
-        return;
-      } else {
-        console.error('❌ Failed to fetch profile after creation - falling back to normal flow');
-      }
-    }
-    
-    try {
-      console.log('📊 STEP 1: Checking user profile in database...');
-      
-      // Check for preferred role from localStorage (Google OAuth flow)
-      const preferredRole = getPreferredRole();
-      if (preferredRole) {
-        console.log('🎯 Found preferred role from localStorage (keeping for modal):', preferredRole);
-      }
-      
-      // Fetch user profile using the optimized function
-      const userProfile = await fetchUserProfile(supabaseUser.id);
-
-      // Check if user profile exists
-      if (userProfile) {
-        console.log('✅ User profile found and loaded');
-        
-        // CRITICAL: Clean up preferred role ONLY when user profile exists
-        if (preferredRole) {
-          console.log('🧹 User profile exists - cleaning up preferred role from localStorage');
-          localStorage.removeItem('preferredRole');
-        }
-        
-        // Set user and ensure modal state is cleared IMMEDIATELY
-        setUser(userProfile);
+        // IMMEDIATE state update
+        setUser(userData);
         setNeedsProfileSetup(false);
         setPendingUserData(null);
         setLoading(false);
         
-        console.log('🎯 MODAL CHECK: User profile loaded immediately', {
+        // Clean up any stored preferences
+        localStorage.removeItem('preferredRole');
+        
+        console.log('🎯 MODAL CHECK: User exists, NO MODAL', {
           needsSetup: false,
           hasPendingData: false,
           modalShouldShow: false,
           hasUser: true,
-          userName: userProfile.name,
-          userRole: userProfile.role,
-          reason: 'profile_found_immediate',
-          timestamp: new Date().toISOString()
+          userName: userData.name,
+          userRole: userData.role,
+          reason: 'user_exists_immediate',
+          queryTime: `${queryTime}ms`
         });
       } else {
-        // No profile found - need profile setup
-        console.log('🎯 No profile found - triggering setup modal');
-        const pendingData = setupPendingProfile(supabaseUser, preferredRole);
+        // ❌ NO USER PROFILE - SHOW MODAL
+        console.log('❌ No user profile found - setup needed');
         
-        console.log('🎯 MODAL CHECK: No profile found, setup needed', {
+        // Get preferred role for modal
+        const preferredRole = getPreferredRole();
+        
+        const pendingData = {
+          id: supabaseUser.id,
+          email: supabaseUser.email || '',
+          name: supabaseUser.user_metadata?.full_name || 
+                supabaseUser.user_metadata?.name || 
+                supabaseUser.email?.split('@')[0] || 'User',
+          avatar: supabaseUser.user_metadata?.avatar_url || 
+                  supabaseUser.user_metadata?.picture,
+          preferredRole: preferredRole as 'owner' | 'customer' || undefined
+        };
+        
+        // Set modal state
+        setPendingUserData(pendingData);
+        setNeedsProfileSetup(true);
+        setUser(null);
+        setLoading(false);
+        
+        console.log('🎯 MODAL CHECK: No profile, SHOW MODAL', {
           needsSetup: true,
-          hasPendingData: !!pendingData,
+          hasPendingData: true,
           modalShouldShow: true,
           reason: 'no_profile_found',
-          timestamp: new Date().toISOString()
+          queryTime: `${queryTime}ms`,
+          preferredRole
         });
       }
     } catch (error) {
-      console.error('❌ CRITICAL ERROR in handleUserSession:', error);
+      console.error('❌ CRITICAL ERROR in single query:', error);
       
-      // On critical error, create fallback user to prevent modal flash
-      console.log('🎯 CRITICAL ERROR FALLBACK: Creating fallback user immediately');
+      // On any error, create fallback user - NO MODAL
       createFallbackUser(supabaseUser);
-      
-      console.log('🎯 MODAL CHECK: Critical error, fallback created immediately', {
-        needsSetup: false,
-        hasPendingData: false,
-        modalShouldShow: false,
-        reason: 'critical_error_fallback_immediate',
-        timestamp: new Date().toISOString()
-      });
     }
     
-    console.log('👤 ===== ENDING handleUserSession =====');
+    console.log('👤 ===== ENDING handleUserSession (SINGLE REQUEST) =====');
   };
 
   // Helper function to create fallback user (prevents modal flash on errors)
@@ -373,34 +303,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setNeedsProfileSetup(false);
     setPendingUserData(null);
     setLoading(false);
-  };
-
-  // Helper function to setup pending profile - RETURNS PENDING DATA FOR SYNC CHECK
-  const setupPendingProfile = (supabaseUser: SupabaseUser, preferredRole?: string | null) => {
-    const userData = {
-      id: supabaseUser.id,
-      email: supabaseUser.email || '',
-      name: supabaseUser.user_metadata?.full_name || 
-            supabaseUser.user_metadata?.name || 
-            supabaseUser.email?.split('@')[0] || 'User',
-      avatar: supabaseUser.user_metadata?.avatar_url || 
-              supabaseUser.user_metadata?.picture,
-      preferredRole: preferredRole as 'owner' | 'customer' || undefined
-    };
     
-    console.log('📝 Setting up pending profile:', userData);
-    console.log('🎯 Preferred role will be preserved for modal:', preferredRole);
-    
-    // Set modal state
-    setPendingUserData(userData);
-    setNeedsProfileSetup(true);
-    setUser(null);
-    setLoading(false);
-    
-    console.log('🎯 Profile setup modal should now show');
-    
-    // Return userData for synchronous checking
-    return userData;
+    console.log('🎯 MODAL CHECK: Fallback user created, NO MODAL', {
+      needsSetup: false,
+      hasPendingData: false,
+      modalShouldShow: false,
+      reason: 'fallback_user_created'
+    });
   };
 
   const createUserProfile = async (userData: { name: string; role: 'owner' | 'customer' }) => {
@@ -420,7 +329,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name)}&size=150&background=059669&color=fff&bold=true`;
       }
 
-      console.log('🔨 Inserting into database with 3 second timeout...');
+      console.log('🔨 Inserting into database with 2 second timeout...');
       const insertStartTime = Date.now();
       
       // FAST INSERT with timeout
@@ -440,12 +349,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         .select('id, name, email, role, avatar, rating, review_count')
         .single();
 
-      // 3 second timeout for insert
+      // 2 second timeout for insert
       const insertTimeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {
-          console.log('⏰ INSERT TIMEOUT: Profile creation timeout after 3 seconds');
-          reject(new Error('Profile creation timeout (3s)'));
-        }, 3000);
+          console.log('⏰ INSERT TIMEOUT: Profile creation timeout after 2 seconds');
+          reject(new Error('Profile creation timeout (2s)'));
+        }, 2000);
       });
 
       const { data: newUser, error: dbError } = await Promise.race([
@@ -505,7 +414,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setNeedsProfileSetup(false);
       setPendingUserData(null);
 
-      // SYNCHRONOUS CHECK AFTER PROFILE CREATION
       console.log('🎯 MODAL CHECK: Profile created successfully', {
         needsSetup: false,
         hasPendingData: false,
@@ -607,7 +515,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           ]);
 
         const profileTimeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Profile creation timeout')), 3000);
+          setTimeout(() => reject(new Error('Profile creation timeout')), 2000);
         });
 
         const { error: userError } = await Promise.race([
