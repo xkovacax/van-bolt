@@ -153,11 +153,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const queryStartTime = Date.now();
       
       // Check for preferred role from localStorage (Google OAuth flow)
+      // CRITICAL: Don't remove it yet - only read it
       const preferredRole = getPreferredRole();
       if (preferredRole) {
-        console.log('🎯 Found preferred role from localStorage:', preferredRole);
-        // Clean up after reading (we'll use it once)
-        localStorage.removeItem('preferredRole');
+        console.log('🎯 Found preferred role from localStorage (keeping for modal):', preferredRole);
       }
       
       // ULTRA-FAST QUERY: Reduced timeout to 3 seconds and optimized query
@@ -266,6 +265,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.log(`✅ User profile found in ${queryTime}ms`);
         console.log('✅ Profile data:', userProfile);
         
+        // CRITICAL: Clean up preferred role ONLY when user profile exists
+        if (preferredRole) {
+          console.log('🧹 User profile exists - cleaning up preferred role from localStorage');
+          localStorage.removeItem('preferredRole');
+        }
+        
         // Set user and ensure modal state is cleared
         setUser({
           id: userProfile.id,
@@ -363,6 +368,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
     
     console.log('📝 Setting up pending profile:', userData);
+    console.log('🎯 Preferred role will be preserved for modal:', preferredRole);
     
     // Set modal state
     setPendingUserData(userData);
@@ -435,6 +441,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       console.log('✅ User profile created successfully:', newUser);
+
+      // CRITICAL: Clean up preferred role ONLY after successful profile creation
+      console.log('🧹 Profile created successfully - cleaning up preferred role from localStorage');
+      localStorage.removeItem('preferredRole');
 
       // Update auth metadata in background (don't wait for it)
       supabase.auth.updateUser({
