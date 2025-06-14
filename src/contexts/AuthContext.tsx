@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { User as SupabaseUser, Session, AuthError } from '@supabase/supabase-js';
 import { supabase, getRedirectUrl } from '../lib/supabase';
 import { User } from '../types';
@@ -38,9 +38,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [needsProfileSetup, setNeedsProfileSetup] = useState(false);
   const [pendingUserData, setPendingUserData] = useState<any>(null);
+  
+  // 🚨 CRITICAL: Prevent infinite loops with refs
+  const isProcessingUser = useRef(false);
+  const lastProcessedUserId = useRef<string | null>(null);
+  const authInitialized = useRef(false);
 
   useEffect(() => {
     console.log('🚀 AuthProvider initializing...');
+    
+    // 🚨 CRITICAL: Prevent multiple initializations
+    if (authInitialized.current) {
+      console.log('⚠️ Auth already initialized, skipping...');
+      return;
+    }
+    authInitialized.current = true;
     
     // Get initial session
     supabase.auth.getSession().then(({ data: { session }, error }) => {
@@ -82,8 +94,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      subscription.unsubscribe();
+      authInitialized.current = false;
+    };
+  }, []); // 🚨 CRITICAL: Empty dependency array to prevent re-runs
 
   const resetAuthState = () => {
     console.log('🔄 Resetting auth state');
@@ -91,52 +106,92 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setNeedsProfileSetup(false);
     setPendingUserData(null);
     setLoading(false);
+    isProcessingUser.current = false;
+    lastProcessedUserId.current = null;
   };
 
-  // 🚨 CRITICAL FIX: PURE DATABASE APPROACH - NO LOCAL VARIABLES
+  // 🚨 CRITICAL FIX: SINGLE DATABASE QUERY WITH INFINITE LOOP PREVENTION
   const handleUserSession = async (supabaseUser: SupabaseUser) => {
-    console.log('👤 ===== STARTING handleUserSession (DATABASE ONLY) =====');
+    console.log('👤 ===== STARTING handleUserSession (SINGLE QUERY) =====');
     console.log('👤 User ID:', supabaseUser.id);
-    console.log('👤 User email:', supabaseUser.email);
     
-    // 🚨 STEP 1: IMMEDIATE STATE RESET TO PREVENT MODAL FLASH
+    // 🚨 CRITICAL: Prevent infinite loops
+    if (isProcessingUser.current) {
+      console.log('⚠️ Already processing user, skipping...');
+      return;
+    }
+    
+    if (lastProcessedUserId.current === supabaseUser.id) {
+      console.log('⚠️ Same user already processed, skipping...');
+      return;
+    }
+    
+    // Set processing flags
+    isProcessingUser.current = true;
+    lastProcessedUserId.current = supabaseUser.id;
+    
+    // 🚨 IMMEDIATE STATE RESET TO PREVENT MODAL FLASH
     console.log('⚡ IMMEDIATE: Preventing modal flash');
     setNeedsProfileSetup(false);
     setPendingUserData(null);
     setLoading(true);
     
     try {
-      console.log('📊 STEP 2: SINGLE database query (DATABASE ONLY)...');
+      console.log('📊 STEP 1: SINGLE database query (ULTRA-FAST)...');
       const queryStartTime = Date.now();
       
-      // 🎯 SINGLE DATABASE QUERY - NO LOCAL STORAGE, NO METADATA
+      // 🎯 SINGLE DATABASE QUERY - ULTRA OPTIMIZED
       const { data: userProfile, error: dbError } = await supabase
         .from('users')
         .select('id, name, email, role, avatar, rating, review_count')
         .eq('id', supabaseUser.id)
         .limit(1)
-        .maybeSingle();
+        .single(); // Use single() instead of maybeSingle() for better performance
 
       const queryTime = Date.now() - queryStartTime;
       console.log(`📊 Database query completed in ${queryTime}ms`);
 
-      // 🚨 STEP 3: PURE DATABASE DECISION - NO FALLBACKS
+      // 🚨 STEP 2: HANDLE RESPONSE - NO FALLBACKS, PURE DATABASE DECISION
       if (dbError) {
-        console.error('❌ Database error:', dbError);
+        console.log('❌ Database error or no profile found:', {
+          code: dbError.code,
+          message: dbError.message,
+          queryTime: `${queryTime}ms`
+        });
         
-        // 🚨 CRITICAL: On database error, ALWAYS show profile setup modal
-        console.log('🎯 DATABASE ERROR: Showing profile setup modal');
-        const pendingData = {
-          id: supabaseUser.id,
-          email: supabaseUser.email || '',
-          name: supabaseUser.email?.split('@')[0] || 'User',
-          avatar: null
-        };
+        // Check if it's "no rows" error (user doesn't exist)
+        if (dbError.code === 'PGRST116' || dbError.message?.includes('no rows')) {
+          console.log('🎯 NO USER PROFILE: Showing profile setup modal');
+          
+          const pendingData = {
+            id: supabaseUser.id,
+            email: supabaseUser.email || '',
+            name: supabaseUser.user_metadata?.full_name || 
+                  supabaseUser.user_metadata?.name || 
+                  supabaseUser.email?.split('@')[0] || 'User',
+            avatar: supabaseUser.user_metadata?.avatar_url || 
+                    supabaseUser.user_metadata?.picture
+          };
+          
+          // Set modal state
+          setPendingUserData(pendingData);
+          setNeedsProfileSetup(true);
+          setUser(null);
+          setLoading(false);
+          
+          console.log('🎯 MODAL: Profile setup modal activated', {
+            needsSetup: true,
+            hasPendingData: true,
+            modalShouldShow: true,
+            reason: 'no_database_profile'
+          });
+        } else {
+          // Other database error - treat as connection issue
+          console.error('🚨 DATABASE CONNECTION ERROR:', dbError);
+          setLoading(false);
+        }
         
-        setPendingUserData(pendingData);
-        setNeedsProfileSetup(true);
-        setUser(null);
-        setLoading(false);
+        isProcessingUser.current = false;
         return;
       }
 
@@ -162,7 +217,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setPendingUserData(null);
         setLoading(false);
         
-        console.log('🎯 MODAL CHECK: User exists in database, NO MODAL', {
+        console.log('🎯 SUCCESS: User loaded from database', {
           needsSetup: false,
           hasPendingData: false,
           modalShouldShow: false,
@@ -170,30 +225,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           userName: userData.name,
           userRole: userData.role,
           source: 'database_only',
-          queryTime: `${queryTime}ms`
-        });
-      } else {
-        // ❌ NO USER PROFILE IN DATABASE - SHOW MODAL
-        console.log('❌ No user profile found in database - setup needed');
-        
-        const pendingData = {
-          id: supabaseUser.id,
-          email: supabaseUser.email || '',
-          name: supabaseUser.email?.split('@')[0] || 'User',
-          avatar: null
-        };
-        
-        // Set modal state
-        setPendingUserData(pendingData);
-        setNeedsProfileSetup(true);
-        setUser(null);
-        setLoading(false);
-        
-        console.log('🎯 MODAL CHECK: No profile in database, SHOW MODAL', {
-          needsSetup: true,
-          hasPendingData: true,
-          modalShouldShow: true,
-          reason: 'no_database_profile',
           queryTime: `${queryTime}ms`
         });
       }
@@ -213,13 +244,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setNeedsProfileSetup(true);
       setUser(null);
       setLoading(false);
+    } finally {
+      // 🚨 CRITICAL: Always reset processing flag
+      isProcessingUser.current = false;
     }
     
-    console.log('👤 ===== ENDING handleUserSession (DATABASE ONLY) =====');
+    console.log('👤 ===== ENDING handleUserSession (SINGLE QUERY) =====');
   };
 
   const createUserProfile = async (userData: { name: string; role: 'owner' | 'customer' }) => {
-    console.log('🔨 ===== STARTING createUserProfile (DATABASE ONLY) =====');
+    console.log('🔨 ===== STARTING createUserProfile (SINGLE INSERT) =====');
     
     if (!pendingUserData) {
       console.error('❌ No pending user data for profile creation');
@@ -236,7 +270,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log('🔨 Inserting into database...');
       const insertStartTime = Date.now();
       
-      // 🎯 CRITICAL: Insert with EXACT role specified by user
+      // 🎯 CRITICAL: Single insert with EXACT role specified by user
       const { data: newUser, error: dbError } = await supabase
         .from('users')
         .insert([
@@ -274,20 +308,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.log('✅ Role saved correctly in database:', newUser.role);
       }
 
-      // Update auth metadata in background (don't wait for it)
-      supabase.auth.updateUser({
-        data: {
-          full_name: userData.name.trim(),
-          role: userData.role
-        }
-      }).then(({ error }) => {
-        if (error) {
-          console.error('⚠️ Auth metadata update error:', error);
-        } else {
-          console.log('✅ Auth metadata updated');
-        }
-      });
-
       // 🎯 CRITICAL: Set user state with EXACT database data
       console.log('🔨 Setting user state with EXACT database data...');
       const userFromDb = {
@@ -308,15 +328,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setNeedsProfileSetup(false);
       setPendingUserData(null);
 
-      console.log('🎯 MODAL CHECK: Profile created successfully', {
+      // Update processing flags
+      lastProcessedUserId.current = newUser.id;
+
+      console.log('🎯 SUCCESS: Profile created successfully', {
         needsSetup: false,
         hasPendingData: false,
         modalShouldShow: false,
         hasUser: true,
         userName: userFromDb.name,
         userRole: userFromDb.role,
-        source: 'database_insert',
-        timestamp: new Date().toISOString()
+        source: 'database_insert'
       });
 
       console.log('🎉 Profile setup completed successfully');
@@ -424,6 +446,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('❌ Cancelling profile setup');
     setNeedsProfileSetup(false);
     setPendingUserData(null);
+    isProcessingUser.current = false;
+    lastProcessedUserId.current = null;
   };
 
   const value = {
