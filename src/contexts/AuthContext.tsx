@@ -103,15 +103,40 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       const queryStartTime = Date.now();
       
-      // Simple direct query without timeout or race conditions
-      const { data: userProfile, error: dbError } = await supabase
+      // ENHANCED: Add explicit timeout and better error handling
+      console.log('📊 Creating query with 10 second timeout...');
+      
+      const queryPromise = supabase
         .from('users')
         .select('id, name, email, role, avatar, rating, review_count')
         .eq('id', supabaseUser.id)
         .maybeSingle();
 
+      // Add explicit timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          console.log('⏰ Database query timeout after 10 seconds');
+          reject(new Error('Database query timeout (10s)'));
+        }, 10000);
+      });
+
+      console.log('📊 Executing query with timeout protection...');
+      
+      const result = await Promise.race([
+        queryPromise,
+        timeoutPromise
+      ]) as any;
+
+      const { data: userProfile, error: dbError } = result;
       const queryTime = Date.now() - queryStartTime;
+      
       console.log(`📊 Database query completed in ${queryTime}ms`);
+      console.log('📊 Query result:', { 
+        hasData: !!userProfile, 
+        hasError: !!dbError,
+        errorCode: dbError?.code,
+        errorMessage: dbError?.message 
+      });
 
       // SYNCHRONOUS MODAL RENDER CHECK - AFTER QUERY COMPLETION
       console.log('🎯 ===== MODAL RENDER CHECK (SYNCHRONOUS AFTER QUERY) =====');
@@ -124,9 +149,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           queryTime: `${queryTime}ms`
         });
         
-        // Check if it's a "not found" type error
-        if (dbError.code === 'PGRST116' || dbError.message?.includes('not found') || dbError.message?.includes('no rows')) {
-          console.log('🎯 User profile not found - needs setup');
+        // Check if it's a "not found" type error or table doesn't exist
+        if (dbError.code === 'PGRST116' || 
+            dbError.message?.includes('not found') || 
+            dbError.message?.includes('no rows') ||
+            dbError.code === '42P01' || // Table doesn't exist
+            dbError.message?.includes('relation') ||
+            dbError.message?.includes('does not exist')) {
+          
+          console.log('🎯 User profile not found or table missing - needs setup');
           const pendingData = setupPendingProfile(supabaseUser);
           
           // SYNCHRONOUS CHECK AFTER SETTING PENDING DATA
@@ -155,6 +186,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Check if user profile exists
       if (userProfile) {
         console.log(`✅ User profile found in ${queryTime}ms`);
+        console.log('✅ Profile data:', userProfile);
         
         // Set user and ensure modal state is cleared
         setUser({
@@ -196,6 +228,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     } catch (error) {
       console.error('❌ CRITICAL ERROR in handleUserSession:', error);
+      console.error('❌ Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
       
       // On critical error, create fallback user to prevent modal flash
       console.log('🎯 CRITICAL ERROR FALLBACK: Creating fallback user');
