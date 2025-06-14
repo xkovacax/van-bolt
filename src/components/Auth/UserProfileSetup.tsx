@@ -10,7 +10,6 @@ interface UserProfileSetupProps {
     email: string;
     name: string;
     avatar?: string;
-    preferredRole?: 'owner' | 'customer';
   } | null;
   defaultRole?: 'owner' | 'customer';
 }
@@ -23,32 +22,28 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({
 }) => {
   const [formData, setFormData] = useState({
     name: userData?.name || '',
-    role: userData?.preferredRole || defaultRole
+    role: defaultRole
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { createUserProfile } = useAuth();
 
-  // Update role when userData or defaultRole changes
+  // Update form data when userData or defaultRole changes
   useEffect(() => {
-    setFormData(prev => ({
-      ...prev,
+    setFormData({
       name: userData?.name || '',
-      role: userData?.preferredRole || defaultRole
-    }));
+      role: defaultRole
+    });
   }, [userData, defaultRole]);
 
   // Disable/enable body scroll when modal opens/closes
   useEffect(() => {
     if (isOpen) {
-      // Disable scrolling
       document.body.style.overflow = 'hidden';
     } else {
-      // Re-enable scrolling
       document.body.style.overflow = 'unset';
     }
 
-    // Cleanup function to ensure scrolling is re-enabled when component unmounts
     return () => {
       document.body.style.overflow = 'unset';
     };
@@ -61,7 +56,6 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({
       hasUserData: !!userData,
       userName: userData?.name,
       userEmail: userData?.email,
-      preferredRole: userData?.preferredRole,
       defaultRole,
       currentRole: formData.role
     });
@@ -108,7 +102,7 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({
     }
 
     try {
-      console.log('🔨 Submitting profile setup:', formData);
+      console.log('🔨 PROFILE SETUP: Submitting with role:', formData.role);
       
       const { error: profileError } = await createUserProfile({
         name: formData.name.trim(),
@@ -121,7 +115,7 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({
         return;
       }
 
-      console.log('✅ Profile created successfully');
+      console.log('✅ Profile created successfully with role:', formData.role);
       // Don't call onClose here - let the auth context handle the state change
     } catch (error) {
       console.error('❌ Profile setup error:', error);
@@ -139,6 +133,7 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({
   };
 
   const handleRoleChange = (role: 'owner' | 'customer') => {
+    console.log('🎯 PROFILE SETUP: Role changed to:', role);
     setFormData({
       ...formData,
       role
@@ -339,12 +334,11 @@ const UserProfileSetup: React.FC<UserProfileSetupProps> = ({
         {/* Development debug info */}
         {process.env.NODE_ENV === 'development' && (
           <div className="mt-4 p-2 bg-gray-100 rounded text-xs">
-            <div className="font-bold">Debug Info:</div>
+            <div className="font-bold">Profile Setup Debug:</div>
             <div>User ID: {userData.id}</div>
             <div>Email: {userData.email}</div>
             <div>Name: {userData.name}</div>
             <div>Avatar: {userData.avatar ? 'Yes' : 'No'}</div>
-            <div>Preferred Role: {userData.preferredRole || 'None'}</div>
             <div>Default Role: {defaultRole}</div>
             <div>Selected Role: {formData.role}</div>
           </div>

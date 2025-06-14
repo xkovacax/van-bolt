@@ -6,14 +6,14 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultRole?: 'owner' | 'customer';
-  defaultMode?: 'login' | 'register'; // New prop to control initial mode
+  defaultMode?: 'login' | 'register';
 }
 
 const AuthModal: React.FC<AuthModalProps> = ({ 
   isOpen, 
   onClose, 
   defaultRole = 'customer',
-  defaultMode = 'login' // Default to login for normal auth flow
+  defaultMode = 'login'
 }) => {
   const [isLogin, setIsLogin] = useState(defaultMode === 'login');
   const [showPassword, setShowPassword] = useState(false);
@@ -42,29 +42,15 @@ const AuthModal: React.FC<AuthModalProps> = ({
   // Disable/enable body scroll when modal opens/closes
   useEffect(() => {
     if (isOpen) {
-      // Disable scrolling
       document.body.style.overflow = 'hidden';
     } else {
-      // Re-enable scrolling
       document.body.style.overflow = 'unset';
     }
 
-    // Cleanup function to ensure scrolling is re-enabled when component unmounts
     return () => {
       document.body.style.overflow = 'unset';
     };
   }, [isOpen]);
-
-  // Helper function to store preferred role with expiry
-  const storePreferredRole = (role: 'owner' | 'customer') => {
-    const expiryTime = Date.now() + (10 * 60 * 1000); // 10 minutes from now
-    const preferredRoleData = {
-      role,
-      expiry: expiryTime
-    };
-    localStorage.setItem('preferredRole', JSON.stringify(preferredRoleData));
-    console.log('🎯 Stored preferred role with 10-minute expiry:', { role, expiryTime: new Date(expiryTime) });
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,10 +90,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
       if (isLogin) {
         result = await login(formData.email, formData.password);
       } else {
-        // Store preferred role for regular registration
-        if (formData.role === 'owner') {
-          storePreferredRole('owner');
-        }
+        console.log('📝 AUTH MODAL: Registering with role:', formData.role);
         result = await register(formData.name, formData.email, formData.password, formData.role);
       }
       
@@ -125,12 +108,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleGoogleLogin = async () => {
     setError(null);
-    
-    // Store preferred role in localStorage for Google OAuth flow with 10-minute expiry
-    if (!isLogin && defaultRole === 'owner') {
-      storePreferredRole('owner');
-      console.log('🔗 Google OAuth: Stored owner preference for 10 minutes');
-    }
+    console.log('🔗 AUTH MODAL: Google OAuth login');
     
     const { error } = await loginWithGoogle();
     if (error) {
@@ -146,6 +124,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   const handleRoleChange = (role: 'owner' | 'customer') => {
+    console.log('🎯 AUTH MODAL: Role changed to:', role);
     setFormData({
       ...formData,
       role
@@ -427,6 +406,17 @@ const AuthModal: React.FC<AuthModalProps> = ({
             <a href="#" className="text-emerald-600 hover:text-emerald-700">Podmienkami používania</a>
             {' '}a{' '}
             <a href="#" className="text-emerald-600 hover:text-emerald-700">Zásadami ochrany súkromia</a>
+          </div>
+        )}
+
+        {/* Debug info in development */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mt-4 p-2 bg-gray-100 rounded text-xs">
+            <div className="font-bold">Auth Modal Debug:</div>
+            <div>Mode: {isLogin ? 'Login' : 'Register'}</div>
+            <div>Default Role: {defaultRole}</div>
+            <div>Current Role: {formData.role}</div>
+            <div>Default Mode: {defaultMode}</div>
           </div>
         )}
       </div>
